@@ -1,7 +1,7 @@
 import _root_.parsley.build.mima
 
 val projectName = "parsley"
-val Scala213 = "2.13.12"
+val Scala213 = "2.13.13"
 val Scala212 = "2.12.18"
 val Scala3 = "3.3.1"
 val Java8 = JavaSpec.temurin("8")
@@ -36,7 +36,7 @@ inThisBuild(List(
   tlSitePublishBranch := Some(mainBranch),
 ))
 
-lazy val root = tlCrossRootProject.aggregate(parsley, parsleyDebug)
+lazy val root = tlCrossRootProject.aggregate(parsley, parsleyDebug, parsleyGarnish)
 
 // These settings are shared between all projects.
 lazy val commonSettings = Seq(
@@ -123,6 +123,66 @@ lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
       }
     }
   )
+
+lazy val parsleyGarnishSettings = commonSettings ++ Seq(
+  semanticdbEnabled := true,
+  semanticdbVersion := scalafixSemanticdb.revision,
+)
+
+lazy val parsleyGarnish = project
+  .in(file("parsley-garnish"))
+  .settings(
+    name := "parsley-garnish",
+    parsleyGarnishSettings,
+
+    publish / skip := true,
+  )
+  .aggregate(garnishRules, garnishInput, garnishOutput, garnishTests)
+
+lazy val garnishRules = project
+  .in(file("parsley-garnish/rules"))
+  .settings(
+    moduleName := "scalafix",
+    parsleyGarnishSettings,
+
+    libraryDependencies += "ch.epfl.scala" %% "scalafix-core" % _root_.scalafix.sbt.BuildInfo.scalafixVersion,
+  )
+
+lazy val garnishInput = project
+  .in(file("parsley-garnish/input"))
+  .dependsOn(parsley.jvm)
+  .settings(
+    publish / skip := true,
+    parsleyGarnishSettings,
+  )
+
+lazy val garnishOutput = project
+  .in(file("parsley-garnish/output"))
+  .dependsOn(parsley.jvm)
+  .settings(
+    publish / skip := true,
+    parsleyGarnishSettings,
+  )
+
+lazy val garnishTests = project
+  .in(file("parsley-garnish/tests"))
+  .settings(
+    publish / skip := true,
+    parsleyGarnishSettings,
+
+    scalafixTestkitOutputSourceDirectories :=
+      (garnishOutput / Compile / unmanagedSourceDirectories).value,
+    scalafixTestkitInputSourceDirectories :=
+      (garnishInput / Compile / unmanagedSourceDirectories).value,
+    scalafixTestkitInputClasspath :=
+      (garnishInput / Compile / fullClasspath).value,
+    scalafixTestkitInputScalacOptions :=
+      (garnishInput / Compile / scalacOptions).value,
+    scalafixTestkitInputScalaVersion :=
+      (garnishInput / Compile / scalaVersion).value,
+  )
+  .dependsOn(garnishRules)
+  .enablePlugins(ScalafixTestkitPlugin)
 
 def testCoverageJob(cacheSteps: List[WorkflowStep]) = WorkflowJob(
     id = "coverage",
