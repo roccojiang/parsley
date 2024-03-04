@@ -127,6 +127,8 @@ lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 lazy val parsleyGarnishSettings = commonSettings ++ Seq(
   semanticdbEnabled := true,
   semanticdbVersion := scalafixSemanticdb.revision,
+
+  scalacOptions ++= Seq("-P:semanticdb:synthetics:on"),
 )
 
 lazy val parsleyGarnish = project
