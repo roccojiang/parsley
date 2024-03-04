@@ -1,5 +1,5 @@
 /*
-rule = Parsley
+rule = LeftRec
 */
 package fix
 
