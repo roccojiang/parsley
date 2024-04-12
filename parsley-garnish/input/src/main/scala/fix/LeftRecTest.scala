@@ -13,7 +13,7 @@ import parsley.character._
 import parsley.syntax.character.{charLift, stringLift}
 
 object LeftRecTest {
-  val AHH = List(1) ++ List(2)
+  val thisIsNotAParsleyValSoItShouldNotBeDetectedAsANonTerminal = List(1) ++ List(2)
 
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
 
@@ -43,8 +43,20 @@ object LeftRecTest {
   val test = empty.map(a => (b: String) => "bye") <*> string("hello")
 
   // val pp = chain.postfix("ca", (pure(identity[String] _).map(((xs: String) => (ba: String) => xs + ba).compose(_)).map(flip(_)) <*> "ba"))
+
+  def defParser[A](p: Parsley[A]): Parsley[A] = p
+
+  object NestedScope {
+    val nestedParser = p
+    val nestedParser2 = nestedParser | a
+    
+    var varParser = nestedParser
+  }
       
   def main(args: Array[String]): Unit = {
+    lazy val parser: Parsley[String] = p | parser2
+    lazy val parser2 = parser | NestedScope.nestedParser | a
+
     // val cabaInputs = List("ca", "caba", "cababa")
     // println(cabaInputs.map(pp.parse(_)))
 
