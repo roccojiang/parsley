@@ -1,5 +1,5 @@
 /*
-rule = LeftRec
+rule = FactorLeftRecursion
  */
 package fix
 
