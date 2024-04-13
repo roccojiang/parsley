@@ -1,13 +1,40 @@
 package fix
 
+import metaconfig.Configured
 import scala.meta._
 import scalafix.v1._
 import scalafix.lint.LintSeverity
 
 import fix.utils.isParsleyType
 
-class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
+case class FactorLeftRecursionConfig(debugOptions: List[String] = List.empty) {
+  def reportNonTerminalLocations: Boolean = debugOptions.contains("reportNonTerminalLocations")
+}
+
+object FactorLeftRecursionConfig {
+  def default = FactorLeftRecursionConfig()
+  implicit val surface = metaconfig.generic.deriveSurface[FactorLeftRecursionConfig]
+  implicit val decoder = metaconfig.generic.deriveDecoder(default)
+}
+
+class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
+  def this() = this(FactorLeftRecursionConfig.default)
+
+  override def withConfiguration(config: Configuration): Configured[Rule] = {
+    config.conf
+      .getOrElse("FactorLeftRecursion")(this.config)
+      .map(newConfig => new FactorLeftRecursion(newConfig))
+  }
+
   override def fix(implicit doc: SemanticDocument): Patch = {
+    if (config.reportNonTerminalLocations) {
+      lintNonTerminalLocations
+    } else {
+      Patch.empty
+    }
+  }
+
+  private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch = {
     getNonTerminals.map {
       case (_, NonTerminalTree(name, _, originalTree)) => Patch.lint(NonTerminalLint(originalTree, name.value))
     }.asPatch
@@ -43,19 +70,10 @@ class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
     // TODO: WE CAN GET WHICH STRING IMPLICIT VIA SYNTHETICS
     // TODO: can we get the full qualified symbol of the e.g. stringLift function from the synthetics?
   }
-
-  private def prettyPrintNonTerminals(implicit doc: SemanticDocument): Unit = {
-    // note: when the rhs is pretty-printed, it uses the display name rather than the symbol name
-    getNonTerminals.foreach { case (sym, NonTerminalTree(name, body, _)) => println(s"$name ($sym): $body") }
-  }
-}
-
-case class FactorLeftRecursionConfig(debugOptions: List[String] = List.empty) {
-
 }
 
 case class NonTerminalLint(defn: Defn, name: String) extends Diagnostic {
   override def position: Position = defn.pos
   override def severity: LintSeverity = LintSeverity.Info
-  override def message: String = s"$name is a non-terminal"
+  override def message: String = s"$name was detected to be a non-terminal"
 }

@@ -41,7 +41,7 @@ package object utils {
         args.foreach(recursivelyPrintSynthetics)
       }
 
-      case Term.Function.After_4_6_0(params, body) => {
+      case Term.Function.After_4_6_0(_, body) => {
         recursivelyPrintSynthetics(body)
       }
 
@@ -51,7 +51,7 @@ package object utils {
 
       case Term.Placeholder() => {}
 
-      case lit: Lit => {}
+      case _: Lit => {}
 
       // too hard to make this exhaustive
       case Term.ArgClause(_, _) => {}
@@ -71,6 +71,8 @@ package object utils {
         parts.foreach(recursivelyPrintSynthetics)
         args.foreach(recursivelyPrintSynthetics)
       }
+
+      case _ => {}
     }
   }
 }
