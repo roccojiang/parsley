@@ -18,7 +18,7 @@ object LeftRecTest {
 
   // TODO: for certain examples like this one with lambdas (or if we can find the function definition to inline?), is it possible to evaluate the flip at compile time?
   // TODO: same thing with if we see pure(identity) as well
-  lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> "ba" | string("ca")
+  lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
   lazy val p2: Parsley[String] = p2.map((xs: String) => (ba: String) => xs + ba) <*> string("ba") | string("ca")
 
   // TODO: output won't compile due to missing parameter types, need to fix this
