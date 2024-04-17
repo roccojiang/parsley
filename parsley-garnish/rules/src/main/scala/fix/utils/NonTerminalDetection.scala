@@ -15,6 +15,8 @@ object NonTerminalDetection {
       }
     }
 
+    // doc.tree.children
+
     doc.tree.collect {
       // see https://scalameta.org/docs/semanticdb/specification.html#symbol for symbol uniqueness guarantees
       // since we only deal with one document at a time, it should be fine to look at both global and local symbols

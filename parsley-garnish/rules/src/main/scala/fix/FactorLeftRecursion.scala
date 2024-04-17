@@ -5,7 +5,8 @@ import scala.meta._
 import scalafix.v1._
 import scalafix.lint.LintSeverity
 
-import fix.utils.NonTerminalDetection.{NonTerminalTree, getNonTerminals}
+import utils.NonTerminalDetection.{NonTerminalTree, getNonTerminals}
+import utils.ParserWithTerm
 
 case class FactorLeftRecursionConfig(debugOptions: List[String] = List.empty) {
   def reportNonTerminalLocations: Boolean = debugOptions.contains("reportNonTerminalLocations")
@@ -27,6 +28,14 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   override def fix(implicit doc: SemanticDocument): Patch = {
+    implicit val env = getNonTerminals
+    val nonTerminals = env.map {
+      case (sym, NonTerminalTree(_, body, _)) =>
+        sym -> ParserWithTerm(body)
+    }
+
+    pprint.pprintln(nonTerminals)
+
     if (config.reportNonTerminalLocations) {
       lintNonTerminalLocations
     } else {

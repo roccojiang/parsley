@@ -11,6 +11,7 @@ import parsley.character._
 // import parsley.syntax.zipped._
 // import parsley.syntax.lift._
 import parsley.syntax.character.{charLift, stringLift}
+import parsley.combinator
 
 object LeftRecTest {
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
@@ -39,6 +40,8 @@ object LeftRecTest {
   // val test = empty <*> "hello"
   // val test = "hello".as(identity _) <*> empty
   val test = empty.map(a => (b: String) => "bye") <*> string("hello")
+
+  // val testingToday = string("hello", "world")
 
   // val pp = chain.postfix("ca", (pure(identity[String] _).map(((xs: String) => (ba: String) => xs + ba).compose(_)).map(flip(_)) <*> "ba"))
 

@@ -18,7 +18,7 @@ package object utils {
     s.info match {
       case Some(symInfo) => getType(symInfo.signature) match {
           // parameterised type: Parsley[_]
-          case Some(TypeRef(_, matchers.parsley(_), _)) => true
+          case Some(TypeRef(_, Matchers.parsley(_), _)) => true
           case _                                        => false
         }
       case _ => false

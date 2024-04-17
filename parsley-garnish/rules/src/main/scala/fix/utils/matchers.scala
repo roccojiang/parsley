@@ -2,7 +2,7 @@ package fix.utils
 
 import scalafix.v1.SymbolMatcher
 
-object matchers {
+object Matchers {
   val parsley = SymbolMatcher.normalized("parsley.Parsley")
   val zipped = SymbolMatcher.normalized(
     (0 to 22).map(i => s"parsley.implicits.zipped.Zipped$i#zipped"): _*

@@ -148,6 +148,9 @@ lazy val garnishRules = project
     parsleyGarnishSettings,
 
     libraryDependencies += "ch.epfl.scala" %% "scalafix-core" % _root_.scalafix.sbt.BuildInfo.scalafixVersion,
+
+    // TODO: remove this, it's only here for debugging purposes
+    libraryDependencies += "com.lihaoyi" %% "pprint" % "0.9.0",
   )
 
 lazy val garnishInput = project
