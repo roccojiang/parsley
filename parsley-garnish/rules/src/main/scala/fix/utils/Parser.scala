@@ -49,6 +49,17 @@ object Parser {
     val term = q"chain.postfix(${p.term})(${op.term})"
   }
 
+  final case class Lift(f: Term, ps: List[Parser], isImplicit: Boolean) extends Parser {
+    val n = ps.length
+
+    val term = if (isImplicit) {
+      q"$f.lift(..${ps.map(_.term)})"
+    } else {
+      val lift = Term.Name(s"lift$n")
+      q"$lift($f, ..${ps.map(_.term)})"
+    }
+  }
+
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
   }
@@ -60,7 +71,10 @@ object Parser {
     case t if env.contains(t.symbol) => NonTerminal(t.symbol)
 
     // "string(s)"
-    case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(s), _)) => Str(s.toString)
+    case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) => {
+      val s = str.text.stripPrefix("\"").stripSuffix("\"")
+      Str(s)
+    }
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
     // "pure(x)"
@@ -72,6 +86,14 @@ object Parser {
     // "p <*> q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<*>(_), _, Term.ArgClause(List(q), _)) => Ap(apply(p), apply(q))
 
+    // "liftN(f, p1, ..., pN)"
+    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
+      Lift(f, ps.map(apply).toList, isImplicit = false)
+    // "f.lift(p1, ..., pN)"
+    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) =>
+      Lift(f, ps.map(apply).toList, isImplicit = true)
+
+    // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 

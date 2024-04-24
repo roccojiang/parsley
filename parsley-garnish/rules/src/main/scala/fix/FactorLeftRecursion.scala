@@ -37,11 +37,14 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         nonTerminalSymbol -> Parser(bodyTerm)
     }.to(mutable.Map)
 
-    for ((sym, parser) <- nonTerminals) {
-      nonTerminals(sym) = transform(unfold(nonTerminals, sym))
-    }
+    pprint.pprintln(nonTerminals)
 
-    // pprint.pprintln(nonTerminals)
+    for ((sym, parser) <- nonTerminals) {
+      val transformedParser = transform(unfold(nonTerminals, sym))
+      if (transformedParser.isDefined) {
+        nonTerminals(sym) = transformedParser.get
+      }
+    }
 
     val leftRecFactoringPatches = nonTerminals.map {
       case (nt, transformed) => Patch.replaceTree(env(nt).body, transformed.term.syntax)
@@ -50,14 +53,18 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     leftRecFactoringPatches + (if (config.reportNonTerminalLocations) lintNonTerminalLocations else Patch.empty)
   }
 
-  private def transform(unfolded: UnfoldedProduction): Parser = {
+  /* Returns a parser transformed into postfix form if it is left-recursive, otherwise returns None. */
+  private def transform(unfolded: UnfoldedProduction): Option[Parser] = {
     val UnfoldedProduction(empty, nonLeftRec, leftRec) = unfolded
     val empties = empty match {
       case None    => Empty
       case Some(t) => Pure(t)
     }
 
-    Postfix(nonLeftRec <|> empties, leftRec)
+    leftRec match {
+      case Empty => None
+      case _     => Some(Postfix(nonLeftRec <|> empties, leftRec))
+    }
   }
 
   private def unfold(env: mutable.Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
@@ -111,6 +118,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
         val lefts = {
           // TODO: implement flipping
+          // pprint.pprintln(s"pl for $r = ${pl.term.syntax}")
           val llr = pl.map(q"flip(_)") <*> q
           val rlr = pe match {
             case None    => Empty
