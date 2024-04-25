@@ -4,7 +4,7 @@ import scala.meta._
 import scalafix.v1._
 
 import fix.utils.Matchers
-import fix.utils.Parser.{Lift, Str}
+import fix.utils.Parser._
 
 class DebugShowTree extends SemanticRule("DebugShowTree") {
   override def fix(implicit doc: SemanticDocument): Patch = {
@@ -18,7 +18,7 @@ class DebugShowTree extends SemanticRule("DebugShowTree") {
       }
     }
 
-    val parser = Lift(q"Add", List(Str("hello")), isImplicit = true)
+    val parser = LiftN(q"Add", List(Str("hello")), isImplicit = true)
     println(parser.term.structure)
 
     // show

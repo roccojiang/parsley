@@ -40,7 +40,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     pprint.pprintln(nonTerminals)
 
     for ((sym, parser) <- nonTerminals) {
-      val transformedParser = transform(unfold(nonTerminals, sym))
+      val transformedParser = transform(unfold(nonTerminals.toMap, sym))
       if (transformedParser.isDefined) {
         nonTerminals(sym) = transformedParser.get
       }
@@ -67,7 +67,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     }
   }
 
-  private def unfold(env: mutable.Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
+  private def unfold(env: Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
     def unfold0(visited: Set[Symbol], nt: Parser): UnfoldedProduction = nt match {
       case p @ NonTerminal(sym) => {
         println(s"found a non-terminal: ${nt.term}")
@@ -97,6 +97,12 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
       case FMap(p, f) => unfold0(visited, Pure(f) <*> p)
 
+      // TODO: don't just convert this into curried form with a chain of <*>s?
+      case LiftN(f, ps, _) => {
+        val curried = (Pure(f) +: ps).reduceLeft(_ <*> _)
+        unfold0(visited, curried)
+      }
+
       case Or(p, q) => {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
@@ -105,7 +111,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         UnfoldedProduction(pe.orElse(qe), pn <|> qn, pl <|> ql)
       }
       
-      case r @ Ap(p, q) => {
+      case Ap(p, q) => {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 

@@ -7,7 +7,7 @@ import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
 // import parsley.combinator._
-// import parsley.expr._
+import parsley.expr._
 // import parsley.syntax.zipped._
 // import parsley.syntax.lift._
 import parsley.syntax.character.{charLift, stringLift}
