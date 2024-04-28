@@ -8,7 +8,7 @@ import PartialFunction.cond
 // TODO: tidy up
 package object utils {
 
-  def getType(sig: Signature): Option[SemanticType] = sig match {
+  def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
     // which symbols have value/method sigs differs between scala versions?
     case ValueSignature(tpe)               => Some(tpe)
     case MethodSignature(_, _, returnType) => Some(returnType)
@@ -16,8 +16,14 @@ package object utils {
     case _ => None
   }
 
+  def getSymbolType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
+    s.info.flatMap(info => getSemanticType(info.signature)).collect {
+      case TypeRef(_, _, List(t)) => Type.Name(t.toString)
+    }
+  }
+
   def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
-    case Some(info) => cond(getType(info.signature)) {
+    case Some(info) => cond(getSemanticType(info.signature)) {
       // parameterised type: Parsley[_]
       case Some(TypeRef(_, Matchers.parsley(_), _)) => true
     }

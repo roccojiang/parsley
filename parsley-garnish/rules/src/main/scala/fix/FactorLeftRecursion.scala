@@ -34,12 +34,12 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     implicit val env = getNonTerminals
 
     val nonTerminals = env.map {
-      case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _)) =>
+      case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _, _)) =>
         nonTerminalSymbol -> Parser(bodyTerm)
     }.to(mutable.Map)
     
     for ((sym, parser) <- nonTerminals) {
-      val transformedParser = transform(unfold(nonTerminals.toMap, sym))
+      val transformedParser = transform(unfold(nonTerminals.toMap, sym), env(sym).tpe)
       if (transformedParser.isDefined) {
         nonTerminals(sym) = transformedParser.get
       }
@@ -55,7 +55,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   /* Returns a parser transformed into postfix form if it is left-recursive, otherwise returns None. */
-  private def transform(unfolded: UnfoldedProduction): Option[Parser] = {
+  private def transform(unfolded: UnfoldedProduction, tpe: Type.Name): Option[Parser] = {
     val UnfoldedProduction(empty, nonLeftRec, leftRec) = unfolded
     val empties = empty match {
       case None    => Empty
@@ -65,7 +65,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     leftRec match {
       case Empty   => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
-      case _       => Some(Postfix(nonLeftRec <|> empties, leftRec))
+      case _       => Some(Postfix(tpe, nonLeftRec <|> empties, leftRec))
     }
   }
 
@@ -75,9 +75,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         println(s"found a non-terminal: ${nt.term}")
         println(s"\tvisited = $visited")
 
-        val tpe = utils.getType(sym.info.get.signature).collect {
-          case TypeRef(_, Matchers.parsley(_), List(t)) => Type.Name(t.toString)
-        }
+        val tpe = utils.getSymbolType(sym)
         assert(tpe.isDefined, s"expected a Parsley type for $sym, got ${sym.info.get.signature}")
 
         if (sym == nonTerminal) {
@@ -158,7 +156,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch = {
     getNonTerminals.map {
-      case (_, NonTerminalTree(name, _, originalTree)) => Patch.lint(NonTerminalLint(originalTree, name.value))
+      case (_, NonTerminalTree(name, _, _, originalTree)) => Patch.lint(NonTerminalLint(originalTree, name.value))
     }.asPatch
   }
 }

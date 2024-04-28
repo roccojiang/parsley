@@ -29,8 +29,8 @@ object Func {
     val term = q"flip(_)"
   }
 
-  case class Opaque(t: Term) extends Func {
-    val term = t
+  case class Opaque(t: Term, shouldCurry: Boolean) extends Func {
+    val term = if (shouldCurry) p"$t.curried" else t
   }
 
   // case class App[A, B](f: Func[A => B], x: Func[A]) extends Func[B] {

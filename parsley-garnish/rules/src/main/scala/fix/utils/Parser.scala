@@ -46,8 +46,8 @@ object Parser {
     val term = q"string($s)"
   }
 
-  final case class Postfix(p: Parser, op: Parser) extends Parser {
-    val term = q"chain.postfix(${p.term})(${op.term})"
+  final case class Postfix(tpe: Type.Name, p: Parser, op: Parser) extends Parser {
+    val term = q"chain.postfix[$tpe](${p.term})(${op.term})"
   }
 
   final case class LiftN(f: Func, ps: List[Parser], isImplicit: Boolean) extends Parser {
@@ -79,9 +79,9 @@ object Parser {
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
     // "pure(x)"
-    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
+    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x, shouldCurry = false))
     // "p.map(f)"
-    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => FMap(apply(qual), Opaque(f))
+    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => FMap(apply(qual), Opaque(f, shouldCurry = false))
     // "p <|> q" or "p | q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
     // "p <*> q"
@@ -89,10 +89,10 @@ object Parser {
 
     // "liftN(f, p1, ..., pN)"
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
-      LiftN(Opaque(f), ps.map(apply).toList, isImplicit = false)
+      LiftN(Opaque(f, shouldCurry = ps.length > 1), ps.map(apply).toList, isImplicit = false)
     // "f.lift(p1, ..., pN)"
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) =>
-      LiftN(Opaque(f), ps.map(apply).toList, isImplicit = true)
+      LiftN(Opaque(f, shouldCurry = ps.length > 1), ps.map(apply).toList, isImplicit = true)
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
