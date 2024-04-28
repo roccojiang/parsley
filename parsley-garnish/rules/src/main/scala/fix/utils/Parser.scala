@@ -21,7 +21,7 @@ object Parser {
     val term = Term.Name("empty")
   }
 
-  final case class Or(p: Parser, q: Parser) extends Parser {
+  final case class Choice(p: Parser, q: Parser) extends Parser {
     // TODO: think about this
     // Note: this doesn't preserve the original combinator choice (i.e. <|> or |) but it doesn't really matter imo
     val term = q"${p.term} | ${q.term}"
@@ -82,7 +82,7 @@ object Parser {
     // "p.map(f)"
     case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => FMap(apply(qual), f)
     // "p <|> q" or "p | q"
-    case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Or(apply(p), apply(q))
+    case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
     // "p <*> q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<*>(_), _, Term.ArgClause(List(q), _)) => Ap(apply(p), apply(q))
 
@@ -102,7 +102,7 @@ object Parser {
       case (p, Empty)   => p
       case (Empty, q)   => q
       case (Pure(_), _) => p
-      case (p, q)       => Or(p, q)
+      case (p, q)       => Choice(p, q)
     }
 
     def <*>(q: Parser): Parser = (p, q) match {

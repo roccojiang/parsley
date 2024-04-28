@@ -62,8 +62,9 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     }
 
     leftRec match {
-      case Empty => None
-      case _     => Some(Postfix(nonLeftRec <|> empties, leftRec))
+      case Empty   => None
+      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
+      case _       => Some(Postfix(nonLeftRec <|> empties, leftRec))
     }
   }
 
@@ -103,7 +104,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         unfold0(visited, curried)
       }
 
-      case Or(p, q) => {
+      case Choice(p, q) => {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 

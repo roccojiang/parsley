@@ -48,14 +48,32 @@ object Playground {
   lazy val rManual = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").as(Add(_, Atom("a"))))
 
 
-  val add = pure(identity[Expr] _).map(Add.curried.compose(_))
+  val add1 = pure(identity[Expr] _).map(Add.curried.compose(_))
   val add2 = pure(Add.curried)
   val flipped = add2.map(flip(_))
 
+  val flipped2 = pure(flip(Add.curried))
 
+
+  def addL(a: List[String])(b: String) = a.mkString + b
+  // This should be infinitely diverging!
+  val manyTest = chain.postfix(string("b"))(many(string("a")).map(addL))
+
+
+  // Can't be fixed with postfix
+  lazy val simpleBad: Parsley[String] = string("a") <|> simpleBad // will stack overflow for input "a", due to strict positions
+  lazy val simpleGood: Parsley[String] = string("a") <|> ~simpleGood // will still infinitely recurse on any input other than "a", obviously
+
+  lazy val simpleBadPostfix: Parsley[String] = chain.postfix(string("a"))(pure(identity))
+
+  def add(a: String)(b: String) = a + b
+  lazy val infiniteAs: Parsley[String] = string("a").map(add) <*> infiniteAs // not left rec: (Empty, Ap(FMap(Str(a),add),NonTerminal(infiniteAs)), Empty)
   
+  lazy val useless: Parsley[String] = useless.map(_ => "a")
+  // lazy val useless2: Parsley[String] = chain.postfix[String](empty)(pure(identity[String] _).map((_: String => "a").compose(_))) // === chain.postfix(empty)(pure(_ => "a"))
+ 
   def main(args: Array[String]): Unit = {
-    // def add(a: String)(b: String) = a + b
+    println(simpleBadPostfix.parse("aaa"))
     
     // val input = "parse"
 
@@ -68,7 +86,12 @@ object Playground {
     // val test2 = (empty.debug("empty") <*> string("p").debug("p")).debug("test2")
     // println(test2.parse(input))
 
-    val parse = s2.parse("cababab")
-    println(parse)
+    // val test = (empty.debug("empty").map(add).debug("add")).debug("whole")
+    // println(test.parse("hello"))
+    // val test2 = empty.debug("empty")
+    // println(test2.parse("hello"))
+
+    // val parse = s2.parse("cababab")
+    // println(parse)
   }
 }
