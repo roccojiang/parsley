@@ -18,8 +18,8 @@ class DebugShowTree extends SemanticRule("DebugShowTree") {
       }
     }
 
-    val parser = LiftN(q"Add", List(Str("hello")), isImplicit = true)
-    println(parser.term.structure)
+    // val parser = LiftN(q"Add", List(Str("hello")), isImplicit = true)
+    // println(parser.term.structure)
 
     // show
     Patch.empty

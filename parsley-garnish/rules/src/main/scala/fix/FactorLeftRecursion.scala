@@ -6,6 +6,7 @@ import scala.meta._
 import scalafix.v1._
 import scalafix.lint.LintSeverity
 
+import utils.Func, utils.Func._
 import utils.NonTerminalDetection.{NonTerminalTree, getNonTerminals}
 import utils.Matchers
 import utils.Parser, utils.Parser._
@@ -82,7 +83,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         if (sym == nonTerminal) {
           println(s"\tmatched non-terminal $sym")
           // TODO: is the type used here actually correct or am I just making this up?
-          UnfoldedProduction(None, Empty, Pure(q"identity[${tpe.get}] _"))
+          UnfoldedProduction(None, Empty, Pure(Id(tpe.get)))
         } else if (visited.contains(sym)) {
           println(s"\talready visited $sym")
           UnfoldedProduction(None, p, Empty)
@@ -118,7 +119,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
         val empty = if (pe.isDefined && qe.isDefined) {
           // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
-          Some(q"${pe.get}(${qe.get})") // pure f <*> pure x = pure (f x)
+          Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
         } else {
           None
         }
@@ -126,10 +127,10 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         val lefts = {
           // TODO: implement flipping
           // pprint.pprintln(s"pl for $r = ${pl.term.syntax}")
-          val llr = pl.map(q"flip(_)") <*> q
+          val llr = pl.map(Flip) <*> q
           val rlr = pe match {
             case None    => Empty
-            case Some(f) => ql.map(q"$f.compose(_)")
+            case Some(f) => ql.map(App(Compose, f))
           }
           
           llr <|> rlr
@@ -162,7 +163,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 }
 
-case class UnfoldedProduction(empty: Option[Term], nonLeftRec: Parser, leftRec: Parser)
+case class UnfoldedProduction(empty: Option[Func], nonLeftRec: Parser, leftRec: Parser)
 
 case class NonTerminalLint(defn: Defn, name: String) extends Diagnostic {
   override def position: Position = defn.pos

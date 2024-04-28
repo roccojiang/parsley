@@ -47,6 +47,15 @@ object LeftRecTest {
 
   // val testingToday = string("hello", "world")
 
+  // Indirect left recursion with two parsers
+  lazy val ruleA = ruleB.map(add) <*> string("a") | string("a")
+  lazy val ruleB: Parsley[String] = ruleA.map(add) <*> string("b") | string("b")
+
+  // TODO: should we remove the ruleB definition since it's been inlined into the transformed ruleA?
+  // Output:
+  // lazy val ruleA2 = chain.postfix(string("b").map(add) <*> string("a") | string("a"))((pure(identity[String] _).map(add.compose(_)).map(flip(_)) <*> string("b")).map(add.compose(_)).map(flip(_)) <*> string("a"))
+  // lazy val ruleB2: Parsley[String] = ruleA2.map(add) <*> string("b") | "b"
+  
   // val pp = chain.postfix("ca", (pure(identity[String] _).map(((xs: String) => (ba: String) => xs + ba).compose(_)).map(flip(_)) <*> "ba"))
 
   def main(args: Array[String]): Unit = {
@@ -56,6 +65,6 @@ object LeftRecTest {
     // val intInputs = List("1", "11", "12", "12345")
     // println(intInputs.map(q.parse(_)))
 
-    val test = string("p").map(add) <*> empty
+    // val test = string("p").map(add) <*> empty
   }
 }
