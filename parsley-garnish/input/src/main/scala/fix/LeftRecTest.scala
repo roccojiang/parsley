@@ -7,7 +7,7 @@ import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
 // import parsley.combinator._
-// import parsley.expr._
+import parsley.expr._
 // import parsley.syntax.zipped._
 // import parsley.syntax.lift._
 import parsley.syntax.character.{charLift, stringLift}
@@ -20,6 +20,10 @@ object LeftRecTest {
   // TODO: same thing with if we see pure(identity) as well
   lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
   lazy val p2: Parsley[String] = p2.map((xs: String) => (ba: String) => xs + ba) <*> string("ba") | string("ca")
+
+
+  val pl = pure(identity[String] _).map(((xs: String) => (ba: Int) => xs + ba).compose(_))
+  val flipped = pl.map(flip(_))
 
   // TODO: output won't compile due to missing parameter types, need to fix this
   lazy val q: Parsley[Int] = q.map((xs: Int) => (c: Char) => c.asDigit + xs) <*> digit | digit.map(_.asDigit)
@@ -51,5 +55,7 @@ object LeftRecTest {
 
     // val intInputs = List("1", "11", "12", "12345")
     // println(intInputs.map(q.parse(_)))
+
+    val test = string("p").map(add) <*> empty
   }
 }

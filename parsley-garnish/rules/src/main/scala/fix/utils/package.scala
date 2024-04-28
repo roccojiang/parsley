@@ -3,6 +3,8 @@ package fix
 import scalafix.v1._
 import scala.meta._
 
+import PartialFunction.cond
+
 // TODO: tidy up
 package object utils {
 
@@ -14,14 +16,10 @@ package object utils {
     case _ => None
   }
 
-  def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = {
-    s.info match {
-      case Some(symInfo) => getType(symInfo.signature) match {
-          // parameterised type: Parsley[_]
-          case Some(TypeRef(_, Matchers.parsley(_), _)) => true
-          case _                                        => false
-        }
-      case _ => false
+  def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
+    case Some(info) => cond(getType(info.signature)) {
+      // parameterised type: Parsley[_]
+      case Some(TypeRef(_, Matchers.parsley(_), _)) => true
     }
   }
 

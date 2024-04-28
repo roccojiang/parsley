@@ -4,8 +4,17 @@ import scalafix.v1.SymbolMatcher
 
 object Matchers {
   val parsley = SymbolMatcher.normalized("parsley.Parsley")
+
+  // TODO: update this
   val zipped = SymbolMatcher.normalized(
     (0 to 22).map(i => s"parsley.implicits.zipped.Zipped$i#zipped"): _*
+  )
+
+  val liftExplicit = SymbolMatcher.normalized(
+    (1 to 22).map(i => s"parsley.lift.lift$i"): _*
+  )
+  val liftImplicit = SymbolMatcher.normalized(
+    (0 to 22).map(i => s"parsley.syntax.lift.Lift$i#lift"): _*
   )
 
   val string = SymbolMatcher.normalized("parsley.character.string")

@@ -36,13 +36,16 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
       case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _)) =>
         nonTerminalSymbol -> Parser(bodyTerm)
     }.to(mutable.Map)
-
+    
     for ((sym, parser) <- nonTerminals) {
-      nonTerminals(sym) = transform(unfold(nonTerminals, sym))
+      val transformedParser = transform(unfold(nonTerminals.toMap, sym))
+      if (transformedParser.isDefined) {
+        nonTerminals(sym) = transformedParser.get
+      }
     }
-
-    // pprint.pprintln(nonTerminals)
-
+    
+    pprint.pprintln(nonTerminals)
+    
     val leftRecFactoringPatches = nonTerminals.map {
       case (nt, transformed) => Patch.replaceTree(env(nt).body, transformed.term.syntax)
     }.asPatch
@@ -50,17 +53,22 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     leftRecFactoringPatches + (if (config.reportNonTerminalLocations) lintNonTerminalLocations else Patch.empty)
   }
 
-  private def transform(unfolded: UnfoldedProduction): Parser = {
+  /* Returns a parser transformed into postfix form if it is left-recursive, otherwise returns None. */
+  private def transform(unfolded: UnfoldedProduction): Option[Parser] = {
     val UnfoldedProduction(empty, nonLeftRec, leftRec) = unfolded
     val empties = empty match {
       case None    => Empty
       case Some(t) => Pure(t)
     }
 
-    Postfix(nonLeftRec <|> empties, leftRec)
+    leftRec match {
+      case Empty   => None
+      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
+      case _       => Some(Postfix(nonLeftRec <|> empties, leftRec))
+    }
   }
 
-  private def unfold(env: mutable.Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
+  private def unfold(env: Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
     def unfold0(visited: Set[Symbol], nt: Parser): UnfoldedProduction = nt match {
       case p @ NonTerminal(sym) => {
         println(s"found a non-terminal: ${nt.term}")
@@ -90,7 +98,13 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
       case FMap(p, f) => unfold0(visited, Pure(f) <*> p)
 
-      case Or(p, q) => {
+      // TODO: don't just convert this into curried form with a chain of <*>s?
+      case LiftN(f, ps, _) => {
+        val curried = (Pure(f) +: ps).reduceLeft(_ <*> _)
+        unfold0(visited, curried)
+      }
+
+      case Choice(p, q) => {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
@@ -98,7 +112,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         UnfoldedProduction(pe.orElse(qe), pn <|> qn, pl <|> ql)
       }
       
-      case r @ Ap(p, q) => {
+      case Ap(p, q) => {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
@@ -111,6 +125,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
         val lefts = {
           // TODO: implement flipping
+          // pprint.pprintln(s"pl for $r = ${pl.term.syntax}")
           val llr = pl.map(q"flip(_)") <*> q
           val rlr = pe match {
             case None    => Empty
