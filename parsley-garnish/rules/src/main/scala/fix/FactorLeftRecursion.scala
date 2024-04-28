@@ -36,16 +36,16 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
       case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _)) =>
         nonTerminalSymbol -> Parser(bodyTerm)
     }.to(mutable.Map)
-
-    pprint.pprintln(nonTerminals)
-
+    
     for ((sym, parser) <- nonTerminals) {
       val transformedParser = transform(unfold(nonTerminals.toMap, sym))
       if (transformedParser.isDefined) {
         nonTerminals(sym) = transformedParser.get
       }
     }
-
+    
+    pprint.pprintln(nonTerminals)
+    
     val leftRecFactoringPatches = nonTerminals.map {
       case (nt, transformed) => Patch.replaceTree(env(nt).body, transformed.term.syntax)
     }.asPatch

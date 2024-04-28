@@ -24,10 +24,13 @@ object NonTerminalDetection {
       // value declarations inferred to have a Parsley[_] type
       case valDefn @ Defn.Val(_, vars, _, body) => collectVars(vars, body, valDefn)
       case varDefn @ Defn.Var.After_4_7_2(_, vars, _, body) => collectVars(vars, body, varDefn)
+      // this case actually probably shouldn't count as a non-terminal
+      /*
       case defDefn @ Defn.Def.After_4_7_3(_, name, _, _, body) if isParsleyType(defDefn.symbol) => {
         // TODO: do we need to do something special to deal with the function arguments?
         List(defDefn.symbol -> NonTerminalTree(name, body, defDefn))
       }
+      */
     }.flatten.toMap
 
     // TODO: WE CAN GET WHICH STRING IMPLICIT VIA SYNTHETICS
