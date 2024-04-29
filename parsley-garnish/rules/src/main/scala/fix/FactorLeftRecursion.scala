@@ -72,15 +72,13 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   private def unfold[T](env: Map[Symbol, Parser[_]], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction[T, T] = {
     def unfold0[A](visited: Set[Symbol], nt: Parser[A]): UnfoldedProduction[T, A] = {
 
-      //   final case class Ap[A, B](p: Parser[A => B], q: Parser[A]) extends Parser[B] {
-
       def unfoldAp[B, C](p: Parser[B => C], q: Parser[B]): UnfoldedProduction[T, C] = {
           val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
           val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
           val empty = if (pe.isDefined && qe.isDefined) {
             // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
-            Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
+            Some(App(pe.get, qe.get, isMethod = false)) // pure f <*> pure x = pure (f x)
           } else {
             None
           }
@@ -91,7 +89,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
             val llr = pl.map(Flip[T, B, C]()) <*> q
             val rlr = pe match {
               case None    => Empty
-              case Some(f) => ql.map(App(Compose[T, B, C](), f))
+              case Some(f) => ql.map(App(Compose[T, B, C](), f, isMethod = true))
             }
           
             llr <|> rlr

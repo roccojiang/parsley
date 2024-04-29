@@ -23,6 +23,7 @@ object Playground {
   // val q = lift2(Add(_, _), string("a"), string("b"))
 
   lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Add.curried)))
+  // lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(a => Atom(a)).map(flip(a => b => Add(a, b))))
 
   lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
 
@@ -44,6 +45,7 @@ object Playground {
   
   // TODO: figure out how to convert r2 to rManual - definition of as = this *> pure(x)  or  this.map(_ => x)
   lazy val rManual = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").as(Add(_, Atom("a"))))
+  lazy val rManual2 = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(s => Add(_, Atom(s)))) // .map(s => e => Add(e, Atom(s)))
 
 
   val add1 = pure(identity[Expr] _).map(Add.curried.compose(_))
@@ -67,7 +69,7 @@ object Playground {
   def add(a: String)(b: String) = a + b
   lazy val infiniteAs: Parsley[String] = string("a").map(add) <*> infiniteAs // not left rec: (Empty, Ap(FMap(Str(a),add),NonTerminal(infiniteAs)), Empty)
   
-  lazy val useless: Parsley[String] = chain.postfix[String](empty)(pure(identity[String]).map((_ => "a").compose(_)))
+  // lazy val useless: Parsley[String] = chain.postfix[String](empty)(pure(identity[String]).map((_ => "a").compose(_)))
   // lazy val useless2: Parsley[String] = chain.postfix[String](empty)(pure(identity[String] _).map((_: String => "a").compose(_))) // === chain.postfix(empty)(pure(_ => "a"))
  
   def main(args: Array[String]): Unit = {
