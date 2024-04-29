@@ -22,10 +22,10 @@ object Playground {
   // val p = Add.lift(string("a").map(Atom(_)), Atom.lift(string("b")))
   // val q = lift2(Add(_, _), string("a"), string("b"))
 
-  // lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(pure(identity[Expr]).map(Add.curried.compose(_)).map(flip) <*> string("a").map(Atom(_)))
-  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(pure(flip(Add.curried)) <*> string("a").map(Atom(_)))
+  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Add.curried)))
 
-  lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr]).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
+  lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
+
   // lazy val s2: Parsley[Expr] = chain.postfix(string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val s2: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
 

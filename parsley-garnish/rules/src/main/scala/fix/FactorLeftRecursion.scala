@@ -95,7 +95,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
       case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
       case Empty => UnfoldedProduction(None, Empty, Empty)
 
-      case FMap(p, f) => unfold0(visited, Pure(f) <*> p)
+      case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
 
       // TODO: don't just convert this into curried form with a chain of <*>s?
       case LiftN(f, ps, _) => {

@@ -19,7 +19,7 @@ sealed abstract class Parser extends Product with Serializable {
 
     case Ap(Empty, _)         => Empty
     case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify).simplify)
-    // case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
+    case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
     case Ap(p, q)             => Ap(p.simplify, q.simplify)
 
     case FMap(Empty, _)   => Empty // TODO: does this hold?

@@ -28,6 +28,7 @@ object Playground {
   lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(Atom(_))) | string("b").map(Atom(_))
 
   lazy val s: Parsley[Expr] = Wow.lift(s, string("a").map(Atom(_)), string("b").map(Atom(_))) | string("c").map(Atom(_))
+
   // lazy val s2: Parsley[Expr] = chain.postfix(string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val s2: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
 
