@@ -65,7 +65,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     leftRec match {
       case Empty   => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
-      case _       => Some(Postfix(tpe, nonLeftRec <|> empties, leftRec))
+      case _       => Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
     }
   }
 

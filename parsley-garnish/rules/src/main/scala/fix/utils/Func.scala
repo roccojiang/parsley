@@ -4,14 +4,33 @@ import scala.meta._
 
 // sealed abstract class Func[A] extends Product with Serializable {
 sealed abstract class Func extends Product with Serializable {
+  import Func._
+
   def term: Term
+
+  def simplify: Func = this match {
+    // identity(x) = x
+    case App(Id(_), x) => x.simplify
+
+    // f.compose(identity) = f
+    case App(App(Compose, f), Id(_)) => f.simplify
+    // identity.compose(f) = f
+    case App(App(Compose, Id(_)), f) => f.simplify
+
+    case App(f, x) => App(f.simplify, x.simplify)
+
+    case _ => this
+  }
 }
 
 object Func {
-  // TODO: this is curried so idk
+  case class Abs(f: Func) extends Func {
+    val term = q"${f.term}(_)"
+  }
+
   case class App(f: Func, x: Func) extends Func {
     val term = f match {
-      case Compose => q"${x.term}.compose(_)"
+      case Compose => q"${x.term}.compose"
       case _ => q"${f.term}(${x.term})"
     }
   }
@@ -22,11 +41,11 @@ object Func {
   }
 
   case object Compose extends Func {
-    val term = q"compose(_)"
+    val term = q"compose"
   }
 
   case object Flip extends Func {
-    val term = q"flip(_)"
+    val term = q"flip"
   }
 
   case class Opaque(t: Term, shouldCurry: Boolean) extends Func {

@@ -7,7 +7,37 @@ import Func._
 import NonTerminalDetection.NonTerminalTree
 
 sealed abstract class Parser extends Product with Serializable {
+  import Parser._
+  
   def term: Term
+
+  def simplify: Parser = this match {
+    case Choice(p, Empty)   => p.simplify
+    case Choice(Empty, q)   => q.simplify
+    case Choice(Pure(f), _) => Pure(f.simplify)
+    case Choice(p, q)       => Choice(p.simplify, q.simplify)
+
+    case Ap(Empty, _)         => Empty
+    case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify).simplify)
+    // case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
+    case Ap(p, q)             => Ap(p.simplify, q.simplify)
+
+    case FMap(Empty, _)   => Empty // TODO: does this hold?
+    case FMap(p, Id(_))   => p.simplify
+    case FMap(Pure(x), f) => Pure(App(f.simplify, x.simplify).simplify)
+    case FMap(p, f)       => FMap(p.simplify, f.simplify)
+
+    case Many(Empty)      => Empty
+    case Many(p)          => Many(p.simplify)
+
+    case Postfix(tpe, p, op)    => Postfix(tpe, p.simplify, op.simplify)
+
+    case LiftN(f, ps, isImplicit) => LiftN(f.simplify, ps.map(_.simplify), isImplicit)
+
+    case Pure(f) => Pure(f.simplify)
+
+    case _ => this
+  }
 }
 object Parser {
   final case class NonTerminal(val ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
@@ -99,21 +129,27 @@ object Parser {
   }
 
   implicit class ParserOps(p: Parser) {
-    def <|>(q: Parser): Parser = (p, q) match {
-      case (p, Empty)   => p
-      case (Empty, q)   => q
-      case (Pure(_), _) => p
-      case (p, q)       => Choice(p, q)
-    }
+    def <|>(q: Parser): Parser = Choice(p, q).simplify
+    def <*> (q: Parser): Parser = Ap(p, q).simplify
+    def map(f: Func): Parser = FMap(p, f).simplify
 
-    def <*>(q: Parser): Parser = (p, q) match {
-      case (Empty, _) => Empty
-      case (p, q)     => Ap(p, q)
-    }
+    // def <|>(q: Parser): Parser = (p, q) match {
+    //   case (p, Empty)   => p
+    //   case (Empty, q)   => q
+    //   case (Pure(_), _) => p
+    //   case (p, q)       => Choice(p, q)
+    // }
 
-    def map(f: Func): Parser = (p, f) match {
-      case (Empty, _) => Empty // TODO: does this hold?
-      case (p, f)     => FMap(p, f)
-    }
+    // def <*>(q: Parser): Parser = (p, q) match {
+    //   case (Empty, _)         => Empty
+    //   case (Pure(f), Pure(x)) => Pure(App(f, x))
+    //   case (p, q)             => Ap(p, q)
+    // }
+
+    // def map(f: Func): Parser = (p, f) match {
+    //   case (Empty, _) => Empty // TODO: does this hold?
+    //   case (p, Id(_)) => p
+    //   case (p, f)     => FMap(p, f)
+    // }
   }
 }
