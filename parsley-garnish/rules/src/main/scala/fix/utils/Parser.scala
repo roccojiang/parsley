@@ -17,7 +17,7 @@ sealed abstract class Parser[+A] extends Product with Serializable {
       case (Empty, _) => Empty // TODO: does this hold?
       // case (p, Id(_)) => p.simplify
       // case (Pure(x), f) => Pure(App(f.simplify, x.simplify, isMethod = false).simplify)
-      case (Pure(x), f) => Pure(f.simplify.app(x.simplify).simplify)
+      case (Pure(x), f) => Pure(App(f.simplify, x.simplify).simplify)
       case (p, f) => FMap(p.simplify, f.simplify)
     }
 
@@ -28,7 +28,7 @@ sealed abstract class Parser[+A] extends Product with Serializable {
       case Choice(p, q)       => Choice(p.simplify, q.simplify)
 
       case Ap(Empty, _)         => Empty
-      case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify, isMethod = false).simplify)
+      case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify).simplify)
       case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
       case Ap(p, q)             => Ap(p.simplify, q.simplify)
 
@@ -134,9 +134,9 @@ object Parser {
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
     // "pure(x)"
-    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x, shouldCurry = false))
+    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
     // "p.map(f)"
-    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => FMap(apply(qual), Opaque(f, shouldCurry = false))
+    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => FMap(apply(qual), Opaque(f))
     // "p <|> q" or "p | q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
     // "p <*> q"
@@ -144,17 +144,17 @@ object Parser {
 
     // "liftN(f, p1, ..., pN)"
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 2) => {
-      Lift2(Opaque(f, shouldCurry = true), apply(ps(0)), apply(ps(1)), isImplicit = false)
+      Lift2(Opaque(f), apply(ps(0)), apply(ps(1)), isImplicit = false)
     }
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 3) => {
-      Lift3(Opaque(f, shouldCurry = true), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = false)
+      Lift3(Opaque(f), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = false)
     }
 
     // "f.lift(p1, ..., pN)"
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) =>
-      Lift2(Opaque(f, shouldCurry = true), apply(ps(0)), apply(ps(1)), isImplicit = true)
+      Lift2(Opaque(f), apply(ps(0)), apply(ps(1)), isImplicit = true)
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) =>
-      Lift3(Opaque(f, shouldCurry = true), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = true)
+      Lift3(Opaque(f), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = true)
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
