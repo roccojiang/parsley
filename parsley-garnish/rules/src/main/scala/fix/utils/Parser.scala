@@ -16,7 +16,8 @@ sealed abstract class Parser[+A] extends Product with Serializable {
     def simplifyMap[B, C](p: Parser[B], f: Func[B => C]): Parser[C] = (p, f) match {
       case (Empty, _) => Empty // TODO: does this hold?
       // case (p, Id(_)) => p.simplify
-      case (Pure(x), f) => Pure(App(f.simplify, x.simplify, isMethod = false).simplify)
+      // case (Pure(x), f) => Pure(App(f.simplify, x.simplify, isMethod = false).simplify)
+      case (Pure(x), f) => Pure(f.simplify.app(x.simplify).simplify)
       case (p, f) => FMap(p.simplify, f.simplify)
     }
 

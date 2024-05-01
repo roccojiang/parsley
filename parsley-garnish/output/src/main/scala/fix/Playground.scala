@@ -26,6 +26,7 @@ object Playground {
   // lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(a => Atom(a)).map(flip(a => b => Add(a, b))))
 
   lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
+  lazy val sPrime: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(Wow.curried) <*> string("b").map(Atom(_)))
 
   // lazy val s2: Parsley[Expr] = chain.postfix(string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val s2: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
@@ -73,7 +74,7 @@ object Playground {
   // lazy val useless2: Parsley[String] = chain.postfix[String](empty)(pure(identity[String] _).map((_: String => "a").compose(_))) // === chain.postfix(empty)(pure(_ => "a"))
  
   def main(args: Array[String]): Unit = {
-    println(simpleBadPostfix.parse("aaa"))
+    // println(simpleBadPostfix.parse("aaa"))
     
     // val input = "parse"
 

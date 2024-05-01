@@ -20,6 +20,7 @@ object FactorLeftRecursionConfig {
   implicit val decoder = metaconfig.generic.deriveDecoder(default)
 }
 
+//noinspection ScalaStyle
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
   def this() = this(FactorLeftRecursionConfig.default)
 
@@ -86,10 +87,21 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
           val lefts = {
             // TODO: implement flipping
             // pprint.pprintln(s"pl for $r = ${pl.term.syntax}")
-            val llr = pl.map(Flip[T, B, C]()) <*> q
+
+            val llr = {
+              val f = Var[T => B => C](Term.fresh())
+              val x = Var[B](Term.fresh())
+              val y = Var[T](Term.fresh())
+              // pl.map(Lam(f, Flip(f))) <*> q
+              // TODO: formulate flip and compose in terms of lambda calculus instead?
+              pl.map(Lam(f, Lam(x, Lam(y, App(App(f, y), x))))) <*> q
+            }
             val rlr = pe match {
               case None    => Empty
-              case Some(f) => ql.map(App(Compose[T, B, C](), f, isMethod = true))
+              case Some(f) => {
+                val g = Var[T => B](Term.fresh())
+                ql.map(Lam(g, Compose(f, g)))
+              }
             }
           
             llr <|> rlr
