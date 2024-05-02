@@ -25,8 +25,14 @@ object Playground {
   lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Add.curried)))
   // lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(a => Atom(a)).map(flip(a => b => Add(a, b))))
 
+  // lazy val rOldOut: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(Atom(_)).map((fresh15 => fresh16 => fresh17 => fresh15(fresh17)(fresh16))((fresh6 => fresh7 => fresh8 => fresh6(fresh7(fresh8)))(Add)(fresh2 => fresh2))))
+  lazy val rOutFixed: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(fresh18 => fresh17 => Add(fresh17, Atom(fresh18))))
+
   lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val sPrime: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(Wow.curried) <*> string("b").map(Atom(_)))
+
+  // lazy val sOut: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(fresh51 => fresh49 => fresh50 => Wow(fresh50)(Atom(_)(fresh51))(fresh49)) <*> string("b").map(Atom(_)))
+  lazy val sOutFixed: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(a => (b: Expr) => (c: Expr) => Wow(c, Atom(a), b)) <*> string("b").map(Atom(_)))
 
   // lazy val s2: Parsley[Expr] = chain.postfix(string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val s2: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))

@@ -13,12 +13,20 @@ sealed abstract class Parser[+A] extends Product with Serializable {
 
   def simplify: Parser[A] = {
 
-    def simplifyMap[B, C](p: Parser[B], f: Func[B => C]): Parser[C] = (p, f) match {
-      case (Empty, _) => Empty // TODO: does this hold?
-      // case (p, Id(_)) => p.simplify
-      // case (Pure(x), f) => Pure(App(f.simplify, x.simplify, isMethod = false).simplify)
-      case (Pure(x), f) => Pure(App(f.simplify, x.simplify).simplify)
-      case (p, f) => FMap(p.simplify, f.simplify)
+    def simplifyMap[B, C, D](parser: FMap[B, C]): Parser[C] = {
+      val FMap(p, f) = parser
+      
+      p match {
+        case Empty => Empty
+        case Pure(x) => Pure(App(f.simplify, x.simplify).simplify)
+        // p.map(g).map(f) = p.map(f.compose(g))
+        case FMap(p, g: Func[D => B]) => {
+          // FMap(p, App(App(compose[D, B, C], g), f))  // ???
+          val x = Var[D](Term.fresh())
+          FMap(p, Lam(x, App(f, App(g, x)))).simplify
+        }
+        case p => FMap(p.simplify, f.simplify)
+      }
     }
 
     this match {
@@ -32,7 +40,7 @@ sealed abstract class Parser[+A] extends Product with Serializable {
       case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
       case Ap(p, q)             => Ap(p.simplify, q.simplify)
 
-      case FMap(p, f) => simplifyMap(p, f)
+      case p @ FMap(_, _) => simplifyMap(p)
 
       // case Many(Empty)      => Empty
       // case Many(p)          => Many(p.simplify)
@@ -104,18 +112,6 @@ object Parser {
     }
   }
 
-  // TODO: this is 1. homogeneous 2. really wrong lmao
-  // final case class LiftN[A, B](f: Func[A => B], ps: List[Parser[A]], isImplicit: Boolean) extends Parser[B] {
-  //   val n = ps.length
-
-  //   val term = if (isImplicit) {
-  //     q"${f.term}.lift(..${ps.map(_.term)})"
-  //   } else {
-  //     val lift = Term.Name(s"lift$n")
-  //     q"$lift(${f.term}, ..${ps.map(_.term)})"
-  //   }
-  // }
-
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
   }
@@ -160,32 +156,13 @@ object Parser {
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 
-  implicit class ParserOps[A](p: Parser[A]) {
+  implicit class ChoiceParserOps[A](p: Parser[A]) {
     def <|>(q: Parser[A]): Parser[A] = Choice(p, q).simplify
   }
-  implicit class ParserOps2[A, B](p: Parser[A => B]) {
+  implicit class ApParserOps[A, B](p: Parser[A => B]) {
     def <*>(q: Parser[A]): Parser[B] = Ap(p, q).simplify
   }
-  implicit class ParserOps3[A, B](p: Parser[A]) {
+  implicit class FMapParserOps[A, B](p: Parser[A]) {
     def map(f: Func[A => B]): Parser[B] = FMap(p, f).simplify
   }
-
-    // def <|>(q: Parser): Parser = (p, q) match {
-    //   case (p, Empty)   => p
-    //   case (Empty, q)   => q
-    //   case (Pure(_), _) => p
-    //   case (p, q)       => Choice(p, q)
-    // }
-
-    // def <*>(q: Parser): Parser = (p, q) match {
-    //   case (Empty, _)         => Empty
-    //   case (Pure(f), Pure(x)) => Pure(App(f, x))
-    //   case (p, q)             => Ap(p, q)
-    // }
-
-    // def map(f: Func): Parser = (p, f) match {
-    //   case (Empty, _) => Empty // TODO: does this hold?
-    //   case (p, Id(_)) => p
-    //   case (p, f)     => FMap(p, f)
-    // }
 }

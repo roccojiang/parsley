@@ -20,7 +20,6 @@ object FactorLeftRecursionConfig {
   implicit val decoder = metaconfig.generic.deriveDecoder(default)
 }
 
-//noinspection ScalaStyle
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
   def this() = this(FactorLeftRecursionConfig.default)
 
