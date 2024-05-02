@@ -8,7 +8,6 @@ import scalafix.lint.LintSeverity
 
 import utils.Func, utils.Func._
 import utils.NonTerminalDetection.{NonTerminalTree, getNonTerminals}
-import utils.Matchers
 import utils.Parser, utils.Parser._
 
 case class FactorLeftRecursionConfig(debugOptions: List[String] = List.empty) {
@@ -39,7 +38,8 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     }.to(mutable.Map)
     
     for ((sym, parser) <- nonTerminals) {
-      val transformedParser = transform(unfold(nonTerminals.toMap, sym), env(sym).tpe)
+      val unfolded = unfold(nonTerminals.toMap, sym)
+      val transformedParser = transform(unfolded, env(sym).tpe)
       if (transformedParser.isDefined) {
         nonTerminals(sym) = transformedParser.get
       }
@@ -55,7 +55,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   /* Returns a parser transformed into postfix form if it is left-recursive, otherwise returns None. */
-  private def transform(unfolded: UnfoldedProduction, tpe: Type.Name): Option[Parser] = {
+  private def transform[A](unfolded: UnfoldedProduction[A, A], tpe: Type.Name): Option[Parser[A]] = {
     val UnfoldedProduction(empty, nonLeftRec, leftRec) = unfolded
     val empties = empty match {
       case None    => Empty
@@ -69,89 +69,101 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     }
   }
 
-  private def unfold(env: Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
-    def unfold0(visited: Set[Symbol], nt: Parser): UnfoldedProduction = nt match {
-      case p @ NonTerminal(sym) => {
-        println(s"found a non-terminal: ${nt.term}")
-        println(s"\tvisited = $visited")
+  private def unfold[NT](env: Map[Symbol, Parser[_]], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction[NT, NT] = {
 
+    def unfold0[A](visited: Set[Symbol], nt: Parser[A]): UnfoldedProduction[NT, A] = {
+
+      def unfoldNonTerminal(sym: Symbol): UnfoldedProduction[NT, A] = {
         val tpe = utils.getSymbolType(sym)
         assert(tpe.isDefined, s"expected a Parsley type for $sym, got ${sym.info.get.signature}")
 
         if (sym == nonTerminal) {
-          println(s"\tmatched non-terminal $sym")
           // TODO: is the type used here actually correct or am I just making this up?
-          UnfoldedProduction(None, Empty, Pure(Id(tpe.get)))
+          // UnfoldedProduction(None, Empty, Pure(Id(tpe.get).asInstanceOf[Func[T => A]]))
+          UnfoldedProduction(None, Empty, Pure(id.asInstanceOf[Func[NT => A]])) /* NT =:= A */
         } else if (visited.contains(sym)) {
-          println(s"\talready visited $sym")
-          UnfoldedProduction(None, p, Empty)
+          UnfoldedProduction(None, NonTerminal(sym), Empty)
         } else {
           println(s"\tvisiting $sym")
-          unfold0(visited + sym, env(sym))
+          unfold0(visited + sym, env(sym).asInstanceOf[Parser[A]])
         }
       }
 
-      case p @ Str(_) => UnfoldedProduction(None, p, Empty)
-      case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
-      case Empty => UnfoldedProduction(None, Empty, Empty)
-
-      case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
-
-      // TODO: don't just convert this into curried form with a chain of <*>s?
-      case LiftN(f, ps, _) => {
-        val curried = (Pure(f) +: ps).reduceLeft(_ <*> _)
-        unfold0(visited, curried)
-      }
-
-      case Choice(p, q) => {
+      def unfoldChoice(p: Parser[A], q: Parser[A]): UnfoldedProduction[NT, A] = {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
         // TODO: originally in the paper this was pe.xor(qe), but I think that's not true under PEG semantics?
         UnfoldedProduction(pe.orElse(qe), pn <|> qn, pl <|> ql)
       }
-      
-      case Ap(p, q) => {
-        val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
-        val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
-        val empty = if (pe.isDefined && qe.isDefined) {
-          // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
-          Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
-        } else {
-          None
-        }
+      def unfoldAp[B, C](p: Parser[B => C], q: Parser[B]): UnfoldedProduction[NT, C] = {
+          val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
+          val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
-        val lefts = {
-          // TODO: implement flipping
-          // pprint.pprintln(s"pl for $r = ${pl.term.syntax}")
-          val llr = pl.map(Flip) <*> q
-          val rlr = pe match {
-            case None    => Empty
-            case Some(f) => ql.map(App(Compose, f))
+          val empty = if (pe.isDefined && qe.isDefined) {
+            // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
+            Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
+          } else {
+            None
           }
-          
-          llr <|> rlr
-        }
 
-        val nonLefts = {
-          val lnl = pn <*> q
-          val rnl = pe match {
-            case None =>    Empty
-            case Some(f) => qn.map(f)
+          val lefts = {
+            val llr = pl.map(flip[NT, B, C]) <*> q
+            val rlr = pe match {
+              case None    => Empty
+              case Some(f) => ql.map(App(compose[NT, B, C], f))
+            }
+          
+            llr <|> rlr
           }
-          
-          lnl <|> rnl
-        }
 
-        UnfoldedProduction(empty, nonLefts, lefts)
+          val nonLefts = {
+            val lnl = pn <*> q
+            val rnl = pe match {
+              case None =>    Empty
+              case Some(f) => qn.map(f)
+            }
+          
+            lnl <|> rnl
+          }
+
+          UnfoldedProduction(empty, nonLefts, lefts)
       }
 
-      // TODO
-      case unhandled => UnfoldedProduction(None, unhandled, Empty)
+      nt match {
+        case NonTerminal(sym) => unfoldNonTerminal(sym)
+
+        case p @ Str(_) => UnfoldedProduction(None, p, Empty)
+        case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
+        case Empty => UnfoldedProduction(None, Empty, Empty)
+
+        case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
+
+        case Lift2(f, p, q, _) => {
+          unfold0(visited, Pure(f) <*> p <*> q)
+        }
+        case Lift3(f, p, q, r, _) => {
+          unfold0(visited, Pure(f) <*> p <*> q <*> r)
+        }
+
+        // TODO: don't just convert this into curried form with a chain of <*>s?
+        // case LiftN(f, ps, _) => {
+        //   // val parsers: List[Parser[A]] = Pure(f) +: ps
+        //   // val curried = parsers.reduceLeft((x: Parser[A => A], y: Parser[A]) => x <*> y)
+        //   val curried = ps.foldLeft(Pure(f))(_ <*> _)
+        //   unfold0(visited, curried)
+        // }
+
+        case Choice(p, q) => unfoldChoice(p, q)
+        case Ap(p, q) => unfoldAp(p, q)
+
+        // TODO
+        case unhandled => UnfoldedProduction(None, unhandled, Empty)
+      }
     }
 
-    unfold0(Set.empty, env(nonTerminal))
+    unfold0(Set.empty, env(nonTerminal).asInstanceOf[Parser[NT]])
   }
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch = {
@@ -161,7 +173,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 }
 
-case class UnfoldedProduction(empty: Option[Func], nonLeftRec: Parser, leftRec: Parser)
+case class UnfoldedProduction[T, A](empty: Option[Func[A]], nonLeftRec: Parser[A], leftRec: Parser[T => A])
 
 case class NonTerminalLint(defn: Defn, name: String) extends Diagnostic {
   override def position: Position = defn.pos

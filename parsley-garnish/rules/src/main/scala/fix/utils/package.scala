@@ -5,14 +5,13 @@ import scala.meta._
 
 import PartialFunction.cond
 
-// TODO: tidy up
 package object utils {
 
   def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
-    // which symbols have value/method sigs differs between scala versions?
+    // which symbols have value/method signatures seems to differ between scala versions
     case ValueSignature(tpe)               => Some(tpe)
     case MethodSignature(_, _, returnType) => Some(returnType)
-    // TODO: class types?
+    // do ClassSignatures hold any useful info?
     case _ => None
   }
 
