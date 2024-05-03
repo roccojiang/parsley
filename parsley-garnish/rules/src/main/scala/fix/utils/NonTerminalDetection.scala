@@ -11,7 +11,7 @@ object NonTerminalDetection {
     def collectVars(vars: List[Pat], body: Term, originalTree: Defn) = {
       vars.collect {
         case Pat.Var(varName) if isParsleyType(varName.symbol) => {
-          val tpe = getSymbolType(varName.symbol)
+          val tpe = getParsleyType(varName.symbol)
           assert(tpe.isDefined, s"expected a Parsley type for $varName, got ${varName.symbol.info.get.signature}")
 
           varName.symbol -> NonTerminalTree(varName, body, tpe.get, originalTree)

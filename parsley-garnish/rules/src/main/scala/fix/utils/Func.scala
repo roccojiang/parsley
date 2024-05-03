@@ -41,6 +41,19 @@ object Func {
     override def simplify: Func[A => B] = Lam(x.simplify, f.simplify)
   }
 
+  case class Lam2[T1, T2, R](x1: Var[T1], x2: Var[T2], f: Func[R]) extends Func[(T1, T2) => R] {
+    val term = {
+      val param1 = Term.Param(List.empty, x1.term, None, None)
+      val param2 = Term.Param(List.empty, x2.term, None, None)
+      q"($param1, $param2) => ${f.term}"
+    }
+
+    override def substitute[C](x: Var[C], y: Func[C]): Func[(T1, T2) => R] =
+      Lam2(x1, x2, f.substitute(x, y))
+
+    override def simplify: Func[(T1, T2) => R] = Lam2(x1.simplify, x2.simplify, f.simplify)
+  }
+
   case class App[A, B](f: Func[A => B], x: Func[A]) extends Func[B] {
     val term = q"${f.term}(${x.term})"
 
@@ -50,6 +63,18 @@ object Func {
     override def simplify: Func[B] = f match {
       case Lam(y: Var[t], g) => g.substitute(y, x.asInstanceOf[Func[t]]).simplify
       case _ => App(f.simplify, x.simplify)
+    }
+  }
+
+  case class App2[T1, T2, R](f: Func[(T1, T2) => R], x1: Func[T1], x2: Func[T2]) extends Func[R] {
+    val term = q"${f.term}(${x1.term}, ${x2.term})"
+
+    override def substitute[C](x: Var[C], y: Func[C]): Func[R] =
+      App2(f.substitute(x, y), x1.substitute(x, y), x2.substitute(x, y))
+
+    override def simplify: Func[R] = f match {
+      case Lam2(y1: Var[t1], y2: Var[t2], g) => g.substitute(y1, x1.asInstanceOf[Func[t1]]).substitute(y2, x2.asInstanceOf[Func[t2]]).simplify
+      case _ => App2(f.simplify, x1.simplify, x2.simplify)
     }
   }
 

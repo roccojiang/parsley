@@ -44,9 +44,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
         nonTerminals(sym) = transformedParser.get
       }
     }
-    
-    pprint.pprintln(nonTerminals)
-    
+
     val leftRecFactoringPatches = nonTerminals.map {
       case (nt, transformed) => Patch.replaceTree(env(nt).body, transformed.term.syntax)
     }.asPatch
@@ -65,6 +63,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     leftRec match {
       case Empty   => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
+      // TODO: import postfix if not in scope
       case _       => Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
     }
   }
@@ -74,7 +73,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
     def unfold0[A](visited: Set[Symbol], nt: Parser[A]): UnfoldedProduction[NT, A] = {
 
       def unfoldNonTerminal(sym: Symbol): UnfoldedProduction[NT, A] = {
-        val tpe = utils.getSymbolType(sym)
+        val tpe = utils.getParsleyType(sym)
         assert(tpe.isDefined, s"expected a Parsley type for $sym, got ${sym.info.get.signature}")
 
         if (sym == nonTerminal) {
