@@ -1,105 +1,101 @@
 package fix.utils
 
 import scala.meta._
+import scalafix.v1._
 
-sealed abstract class Func[+A] extends Product with Serializable {
+sealed abstract class Func extends Product with Serializable {
+  import Func._
+
   def term: Term
 
-  def substitute[B](a: Func.Var[B], b: Func[B]): Func[A]
-  def simplify: Func[A]
+  // TODO: is variable capture an issue, can we assume Barendregt's convention? (see TSfPL notes?)
+  def substitute(x: Var, y: Func): Func = this match {
+    case `x` => y
+    case Lam(xs, f) => Lam(xs, f.substitute(x, y))
+    case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
+    case _ => this
+  }
+
+  def simplify: Func = this match {
+    // Beta reduction rule
+    case App(Lam(xs, f), ys @ _*) => {
+      // TODO: better error handling than this
+      assert(xs.length == ys.length, "Incorrect number of arguments")
+
+      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.simplify
+    }
+
+    case App(f, xs @ _*) => App(f.simplify, xs.map(_.simplify): _*)
+    case Lam(xs, f) => Lam(xs, f.simplify)
+
+    case _ => this
+  }
 }
 
 object Func {
-  case class Opaque[A](t: Term) extends Func[A] {
-    // val term = q"$t.curried" // TODO: don't necessitate having to curry
+  // TODO: can t be guaranteed to be a Term.Name?
+  case class UserDefined(t: Term) extends Func {
     val term = t
-
-    override def substitute[B](x: Var[B], y: Func[B]): Func[A] = this
-
-    override def simplify: Opaque[A] = this
   }
 
   // TODO: make bound variable generation lazy somehow?
-  case class Var[A](name: Term.Name, displayType: Option[Type] = None) extends Func[A] {
+  case class Var(name: Term.Name = Term.fresh(), displayType: Option[SemanticType] = None) extends Func {
     val term = name
-
-    override def substitute[B](x: Var[B], y: Func[B]): Func[A] =
-      if (this == x) y.asInstanceOf[Func[A]] /* A =:= B */ else this
-    
-    override def simplify: Var[A] = this
+  }
+  object Var {
+    def apply(displayType: SemanticType): Var = Var(Term.fresh(), Some(displayType))
   }
 
-  case class Lam[A, B](x: Var[A], f: Func[B]) extends Func[A => B] {
+  /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
+  case class Lam(xs: List[Var], f: Func) extends Func {
     val term = {
-      val param = Term.Param(List.empty, x.term, None, None)
-      q"($param) => ${f.term}"
-    }
-
-    override def substitute[C](x: Var[C], y: Func[C]): Func[A => B] =
-      Lam(this.x, this.f.substitute(x, y))
-    
-    override def simplify: Func[A => B] = Lam(x.simplify, f.simplify)
-  }
-
-  case class Lam2[T1, T2, R](x1: Var[T1], x2: Var[T2], f: Func[R]) extends Func[(T1, T2) => R] {
-    val term = {
-      val param1 = Term.Param(List.empty, x1.term, None, None)
-      val param2 = Term.Param(List.empty, x2.term, None, None)
-      q"($param1, $param2) => ${f.term}"
-    }
-
-    override def substitute[C](x: Var[C], y: Func[C]): Func[(T1, T2) => R] =
-      Lam2(x1, x2, f.substitute(x, y))
-
-    override def simplify: Func[(T1, T2) => R] = Lam2(x1.simplify, x2.simplify, f.simplify)
-  }
-
-  case class App[A, B](f: Func[A => B], x: Func[A]) extends Func[B] {
-    val term = q"${f.term}(${x.term})"
-
-    override def substitute[C](x: Var[C], y: Func[C]): Func[B] =
-      App(f.substitute(x, y), this.x.substitute(x, y))
-
-    override def simplify: Func[B] = f match {
-      case Lam(y: Var[t], g) => g.substitute(y, x.asInstanceOf[Func[t]]).simplify
-      case _ => App(f.simplify, x.simplify)
+      val params = xs.map(x => Term.Param(List.empty, x.term, None, None))
+      q"(..$params) => ${f.term}"
     }
   }
-
-  case class App2[T1, T2, R](f: Func[(T1, T2) => R], x1: Func[T1], x2: Func[T2]) extends Func[R] {
-    val term = q"${f.term}(${x1.term}, ${x2.term})"
-
-    override def substitute[C](x: Var[C], y: Func[C]): Func[R] =
-      App2(f.substitute(x, y), x1.substitute(x, y), x2.substitute(x, y))
-
-    override def simplify: Func[R] = f match {
-      case Lam2(y1: Var[t1], y2: Var[t2], g) => g.substitute(y1, x1.asInstanceOf[Func[t1]]).substitute(y2, x2.asInstanceOf[Func[t2]]).simplify
-      case _ => App2(f.simplify, x1.simplify, x2.simplify)
-    }
+  object Lam {
+    /* x: T, f: R, \x.f : T => R */
+    def apply[A, B](x: Var, f: Func): Func = Lam(List(x), f)
   }
 
-  def id[A]: Func[A => A] = {
-    val x = Var[A](Term.fresh())
+  /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
+  case class App(f: Func, xs: Func*) extends Func {
+    val term = q"${f.term}(..${xs.toList.map(_.term)})"
+  }
+
+  /* id : A => A */
+  def id: Func = {
+    val x = Var() // : A
     Lam(x, x)
   }
 
-  def flip[A, B, C]: Func[(A => B => C) => B => A => C] = {
-    val f = Var[A => B => C](Term.fresh())
-    val x = Var[B](Term.fresh())
-    val y = Var[A](Term.fresh())
+  /* flip : (A => B => C) => B => A => C */
+  def flip: Func = {
+    val f = Var() // : A => B => C
+    val x = Var() // : B
+    val y = Var() // : A
 
     Lam(f, Lam(x, Lam(y, App(App(f, y), x))))
   }
 
-  def compose[A, B, C]: Func[(B => C) => (A => B) => (A => C)] = {
-    val f = Var[B => C](Term.fresh())
-    val g = Var[A => B](Term.fresh())
-    val x = Var[A](Term.fresh())
+  /* compose : (B => C) => (A => B) => A => C */
+  def compose: Func = {
+    val f = Var() // : B => C
+    val g = Var() // : A => B
+    val x = Var() // : A
 
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
 
-  def compose[A, B, C](f: Func[B => C])(g: Func[A => B]): Func[A => C] = {
-    App(App(compose[A, B, C], f), g)
+  // def compose[A, B, C](f: Func[B => C])(g: Func[A => B]): Func[A => C] = {
+  //   App(App(compose[A, B, C], f), g)
+  // }
+
+  def fromTypeSignature(f: UserDefined, signature: List[List[SemanticType]]): Func = {
+    val freshVars = signature.map(_.map(tpe => Var(tpe)))
+
+    freshVars.foldRight(
+      freshVars.foldLeft(f: Func) { (acc, params) => App(acc, params: _*) }
+    ) { (params, acc) => Lam(params, acc) }
   }
 }
