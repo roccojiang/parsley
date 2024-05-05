@@ -11,5 +11,13 @@ object FuncUtils {
     // TODO: partial functions? anonymous functions will probably be converted to a proper function by the time we get here
     case _ => List.empty
   }
-}
 
+  def extractArgs(t: Term): List[List[Term]] = {
+    def recurse(t: Term): List[List[Term]] = t match {
+      case Term.Apply.After_4_6_0(fun, args) => args.values :: recurse(fun)
+      case _ => List.empty
+    }
+
+    recurse(t).reverse
+  }
+}

@@ -8,14 +8,14 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.meta._
 import scala.meta.contrib._
+import scala.reflect.ClassTag
 
 import utils.FuncUtils
 
 class FuncUtilsTest extends AnyFlatSpec with Matchers {
-  // TODO: this doesn't work with Term, but T <: Term suffers from type erasure, use ClassTags if we need to generalise?
-  implicit val termNameEq = new Equality[Term.Name] {
-    def areEqual(a: Term.Name, b: Any): Boolean = b match {
-      case t: Term.Name => a.isEqual(t)
+  implicit def termNameEq[T <: Term : ClassTag] = new Equality[T] {
+    def areEqual(a: T, b: Any): Boolean = b match {
+      case t: T => a.isEqual(t)
       case _ => false
     }
   }
@@ -26,16 +26,34 @@ class FuncUtilsTest extends AnyFlatSpec with Matchers {
     val actual = FuncUtils.extractParamLists(term)
     val expected = List(List(Term.Name("x"), Term.Name("y")), List(Term.Name("z")))
 
-    assertParamListsEqual(actual, expected)
+    assertNestedListsEqual(actual, expected)
   }
 
-  private def assertParamListsEqual(actual: List[List[Term.Name]], expected: List[List[Term.Name]]): Assertion = {
+  "extractArgs" should "return a method call's arguments" in {
+    val term = q"f(x, y)(z)"
+
+    val actual = FuncUtils.extractArgs(term)
+    val expected = List(List(Term.Name("x"), Term.Name("y")), List(Term.Name("z")))
+
+    assertNestedListsEqual(actual, expected)
+  }
+
+  it should "handle more complex arguments" in {
+    val term = q"f(g(x, y), h(z))"
+
+    val actual = FuncUtils.extractArgs(term)
+    val expected = List(List(q"g(x, y)", q"h(z)"))
+
+    assertNestedListsEqual(actual, expected)
+  }
+
+  private def assertNestedListsEqual[A](actual: List[List[A]], expected: List[List[A]])(implicit eq: Equality[A]): Assertion = {
     actual should have length expected.length.toLong
 
-    forAll (actual.zip(expected)) { case (actualParamList, expectedParamList) =>
-      actualParamList should have length expectedParamList.length.toLong
-      forAll (actualParamList.zip(expectedParamList)) { case (actualParam, expectedParam) =>
-        actualParam should equal (expectedParam)
+    forAll (actual.zip(expected)) { case (actualList, expectedList) =>
+      actualList should have length expectedList.length.toLong
+      forAll (actualList.zip(expectedList)) { case (actualVal, expectedParam) =>
+        actualVal should equal (expectedParam)
       } 
     }
   }
