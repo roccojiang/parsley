@@ -3,6 +3,8 @@ package fix.utils
 import scala.meta._
 import scalafix.v1._
 
+import TypeUtils.{isParsleyType, getParsleyType}
+
 object NonTerminalDetection {
 
   case class NonTerminalTree(name: Term.Name, body: Term, tpe: Type.Name, originalTree: Defn)

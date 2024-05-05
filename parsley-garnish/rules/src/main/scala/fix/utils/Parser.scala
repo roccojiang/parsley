@@ -128,6 +128,37 @@ object Parser {
     val term = unrecognisedTerm
   }
 
+
+  def extractFunc(f: Term, debugName: String)(implicit doc: SemanticDocument): Option[Func] = {
+    
+    // TODO: refactor
+    def buildFunc(g: Term.Name)(implicit doc: SemanticDocument) = {
+      println(s"${g.structure} func within $debugName: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
+      val typeSignature = collectInferredType(g)
+      println(s">> typeSignature: $typeSignature")
+      val lambdaTerm = fromTypeSignature(UserDefined(g), typeSignature)
+      println(s">> LAMBDATERM: $lambdaTerm")
+      lambdaTerm
+    }
+
+    println(s"$debugName: ${f.structure}; sig = ${f.symbol.info.map(_.signature.structure)}")
+
+    f.collect {
+      case Term.Apply.After_4_6_0(g: Term.Name, _) => {
+        // println(s"$g symbol sig ${g.symbol.info.map(i => i.signature.structure)}") // this gets a class signature, it seems
+        println(">> Term.Apply(Term.Name) case")
+        buildFunc(g)
+      }
+    }.headOption.orElse(f match {
+      case f: Term.Name => {
+        println(">> Just Term.Name case")
+        buildFunc(f)
+        Some(Func.id) // TODO: replace with proper func
+      }
+      case _ => None
+    })
+  }
+
   def apply(term: Term)(implicit env: Map[Symbol, NonTerminalTree], doc: SemanticDocument): Parser = term match {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
@@ -145,22 +176,9 @@ object Parser {
     case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(UserDefined(x))
     // "p.map(f)"
     case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => {
-      println(s"MAP ${f.structure}")
-
-      val lambda = f.collect {
-        case Term.Apply.After_4_6_0(g: Term.Name, _) => {
-          // println(s"$g symbol sig ${g.symbol.info.map(i => i.signature.structure)}") // this gets a class signature, it seems
-          println(s"${g.structure} func within map: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
-          val typeSignature = collectInferredType(g.synthetics)
-          println(s"typeSignature: $typeSignature")
-          val lambdaTerm = Func.fromTypeSignature(UserDefined(g), typeSignature)
-          pprint.pprintln(lambdaTerm)
-          lambdaTerm
-        }
-      }.headOption
-
+      val lambda = extractFunc(f, "MAP")
       assert(lambda.isDefined)
-      FMap(apply(qual), UserDefined(f))
+      FMap(apply(qual), lambda.get)
     }
     // "p <|> q" or "p | q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
@@ -169,48 +187,34 @@ object Parser {
 
     // "liftN(f, p1, ..., pN)"
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 2) => {
-      // println(s"${f.structure} in lift2: ${f.synthetics} | ${f.synthetics.structure}") // TODO: this doesn't contain the needed info
-      f collect {
-        case Term.Apply.After_4_6_0(g, _) => {
-          println(s"${g.structure} func within lift: ${g.synthetics} | ${g.synthetics.structure}") // TODO: this finds the Term.Name node with needed synthetics
-          val typeSignature = collectInferredType(g.synthetics)
-          println(s"typeSignature: $typeSignature")
-        }
-      }
+      extractFunc(f, "LIFT2_EXPLICIT")
+
       Lift2(UserDefined(f), apply(ps(0)), apply(ps(1)), isImplicit = false)
     }
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 3) => {
-      println(s"$f in lift3: ${f.synthetics} | ${f.synthetics.structure}")
+      extractFunc(f, "LIFT3_EXPLICIT")
+
       Lift3(UserDefined(f), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = false)
     }
 
     // "f.lift(p1, ..., pN)"
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) => {
-      println(s"${f.structure} in lift2: ${f.synthetics} | ${f.synthetics.structure}") // TODO: this contains the needed synthetics
+      extractFunc(f, "LIFT2_IMPLICIT")
+
       // f collect {
       //   case Term.Apply.After_4_6_0(g, _) => println(s"$g func within lift: ${g.synthetics} | ${g.synthetics.structure}") // TODO: this doesn't exist, since f is a Term.Name
       // }
       Lift2(UserDefined(f), apply(ps(0)), apply(ps(1)), isImplicit = true)
     }
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) => {
-      println(s"$f in lift3: ${f.synthetics} | ${f.synthetics.structure}")
+      extractFunc(f, "LIFT3_IMPLICIT")
+
       Lift3(UserDefined(f), apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = true)
     }
 
     // "(p1, ..., pN).zipped(f)"
-    case p@Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) => {
-      println(s"ZIPPED ${p.structure}")
-
-      val lambda = f.collect {
-        case Term.Apply.After_4_6_0(g: Term.Name, _) => {
-          println(s"${g.structure} func within zipped: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
-          val typeSignature = collectInferredType(g.synthetics)
-          println(s"typeSignature: $typeSignature")
-          val lambdaTerm = Func.fromTypeSignature(UserDefined(g), typeSignature)
-          pprint.pprintln(lambdaTerm)
-          lambdaTerm
-        }
-      }.headOption
+    case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) => {
+      extractFunc(f, "ZIPPED")
 
       // TODO actually put the correct parser in
       Lift2(UserDefined(f), apply(ps(0)), apply(ps(1)), isImplicit = true)

@@ -90,12 +90,4 @@ object Func {
   // def compose[A, B, C](f: Func[B => C])(g: Func[A => B]): Func[A => C] = {
   //   App(App(compose[A, B, C], f), g)
   // }
-
-  def fromTypeSignature(f: UserDefined, signature: List[List[SemanticType]]): Func = {
-    val freshVars = signature.map(_.map(tpe => Var(tpe)))
-
-    freshVars.foldRight(
-      freshVars.foldLeft(f: Func) { (acc, params) => App(acc, params: _*) }
-    ) { (params, acc) => Lam(params, acc) }
-  }
 }
