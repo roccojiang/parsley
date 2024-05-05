@@ -3,10 +3,13 @@ package fix.utils
 import scala.meta._
 import scalafix.v1._
 
+import TypeUtils.ConcreteType
+import Func._
+
 object FuncUtils {
   sealed abstract class FuncArg extends Product with Serializable
-  case class ParameterArg(name: Term.Name) extends FuncArg
-  case class ConcreteArg(arg: Term) extends FuncArg
+  case class ParameterArg(name: Term.Name, tpe: Option[ConcreteType] = None) extends FuncArg
+  case class ConcreteArg(arg: Term, tpe: Option[ConcreteType] = None) extends FuncArg
 
   def extractParamLists(f: Term): List[List[Term.Name]] = f match {
     case Term.Function.After_4_6_0(params, body) => {
@@ -25,7 +28,8 @@ object FuncUtils {
     recurse(t).reverse
   }
 
-  def labelFuncArgs(f: Term.Function): List[List[FuncArg]] = {
+  // TODO: f: Term.Function ? 
+  def labelFuncArgs(f: Term): List[List[FuncArg]] = {
     @annotation.tailrec
     def getFuncBody(f: Term): Term = f match {
       case Term.Function.After_4_6_0(_, body) => getFuncBody(body)
@@ -40,5 +44,39 @@ object FuncUtils {
       case arg: Term.Name if paramNames.contains(arg.value) => ParameterArg(arg)
       case arg => ConcreteArg(arg)
     }))
+  }
+
+  def labelFuncArgTypes(args: List[List[FuncArg]], types: List[List[ConcreteType]]): List[List[FuncArg]] = {
+    args.zip(types).map { case (args, types) =>
+      args.zip(types).map { case (arg, tpe) =>
+        arg match {
+          case ParameterArg(name, _) => ParameterArg(name, Some(tpe))
+          case ConcreteArg(arg, _) => ConcreteArg(arg, Some(tpe))
+        }
+      }
+    }
+  }
+
+  def toFunc(f: Opaque, args: List[List[FuncArg]]): Func = {
+    // alpha conversion: assign fresh variable names
+    val freshArgs = args.map(_.map {
+      case ParameterArg(_, tpe) => ParameterArg(Term.fresh(), tpe)
+      case arg => arg
+    })
+
+    val apps = freshArgs.foldLeft(f: Func) { (acc, args) => {
+      val params = args.map {
+        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
+        case ConcreteArg(arg, _)     => Opaque(arg)
+      }
+      App(acc, params: _*)
+    }}
+
+    freshArgs.foldRight(apps) { (args, acc) => {
+      val params = args.collect {
+        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
+      }
+      if (params.isEmpty) acc else Lam(params, acc)
+    }}
   }
 }

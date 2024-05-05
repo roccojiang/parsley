@@ -24,6 +24,7 @@ object SyntheticsTest {
   
   // val zipped = (pure(1), string("a")).zipped(DoubleGeneric(_, _))
   // val zippedCurried = (string("a"), pure(1)).zipped(DoubleCurried(_)(_))
+  val zippedLambda = (pure(1), string("a")).zipped((x, y) => DoubleGeneric(x, y))
   
   // val map = string("a").map(One(_))
   // val mapGeneric = string("a").map(OneGeneric(_))
@@ -31,7 +32,7 @@ object SyntheticsTest {
   // val mapGenericCurried = string("a").map(DoubleGenericCurried(_)(1))
 
   // val mapTriple = string("a").map(TripleGenericPartialCurried(1)(false, _))
-  val mapTripleLambda = string("a").map(x => TripleGenericPartialCurried(1)(false, x))
+  // val mapTripleLambda = string("a").map(x => TripleGenericPartialCurried(1)(false, x))
 
   // def id[A](a: A): A = a
   // val mapFunc = string("a").map(id)

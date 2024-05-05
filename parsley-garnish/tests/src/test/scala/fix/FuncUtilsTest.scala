@@ -24,8 +24,8 @@ class FuncUtilsTest extends AnyFlatSpec with Matchers {
   // see https://github.com/scalatest/scalatest/issues/917
   implicit val funcArgEq = new Equality[FuncArg] {
     def areEqual(a: FuncArg, b: Any): Boolean = a match {
-      case ParameterArg(name) => b.isInstanceOf[ParameterArg] && name.isEqual(b.asInstanceOf[ParameterArg].name)
-      case ConcreteArg(arg) => b.isInstanceOf[ConcreteArg] && arg.isEqual(b.asInstanceOf[ConcreteArg].arg)
+      case ParameterArg(name, tpe) => b.isInstanceOf[ParameterArg] && name.isEqual(b.asInstanceOf[ParameterArg].name) && tpe == b.asInstanceOf[ParameterArg].tpe
+      case ConcreteArg(arg, tpe) => b.isInstanceOf[ConcreteArg] && arg.isEqual(b.asInstanceOf[ConcreteArg].arg) && tpe == b.asInstanceOf[ConcreteArg].tpe
     }
   }
 

@@ -138,6 +138,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
 
         case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
 
+        // TODO: these need to be uncurried, now that Funcs are represented properly, arglist lengths will not match up
         case Lift2(f, p, q, _) => {
           unfold0(visited, Pure(f) <*> p <*> q)
         }

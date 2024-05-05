@@ -53,14 +53,6 @@ object TypeUtils {
     case _ => List.empty
   }
 
-  def fromTypeSignature(f: UserDefined, signature: List[List[ConcreteType]]): Func = {
-    val freshVars = signature.map(_.map(concreteTpe => Var(concreteTpe.tpe)))
-
-    freshVars.foldRight(
-      freshVars.foldLeft(f: Func) { (acc, params) => App(acc, params: _*) }
-    ) { (params, acc) => Lam(params, acc) }
-  }
-
   def collectInferredType(term: Term.Name)(implicit doc: SemanticDocument): List[List[ConcreteType]] = {
     val synthetics = term.synthetics
     val typeList = synthetics collect {

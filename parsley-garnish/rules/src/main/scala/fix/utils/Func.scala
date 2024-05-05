@@ -34,7 +34,7 @@ sealed abstract class Func extends Product with Serializable {
 
 object Func {
   // TODO: can t be guaranteed to be a Term.Name?
-  case class UserDefined(t: Term) extends Func {
+  case class Opaque(t: Term) extends Func {
     val term = t
   }
 
