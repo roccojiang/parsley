@@ -3,8 +3,6 @@ package model
 import scala.meta._
 import scalafix.v1._
 
-import analysis.MethodParametersAnalyzer
-import analysis.TypeSignatureAnalyzer.collectInferredType
 import model.Func._, model.Parser._
 import utils.Matchers
 import fix.leftrec.NonTerminalDetection.NonTerminalTree
@@ -132,42 +130,6 @@ object Parser {
     val term = unrecognisedTerm
   }
 
-  def extractFunc(f: Term, debugName: String)(implicit doc: SemanticDocument): Func = {
-    def extractFunc0(f: Term): Option[Func] = {
-      // TODO: refactor
-      def buildFunc(g: Term.Name) = {
-        println(s"${g.structure} func within $debugName: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
-        val typeSignature = collectInferredType(g)
-        println(s">> typeSignature: $typeSignature")
-        // val lambdaTerm = fromTypeSignature(Opaque(g), typeSignature)
-        val funcArgs = MethodParametersAnalyzer.labelFuncArgs(f)
-        val args = MethodParametersAnalyzer.labelFuncArgTypes(funcArgs, typeSignature)
-        val lambdaTerm = Func.toFunc(Opaque(g), args)
-        println(s">> LAMBDATERM: $lambdaTerm")
-        lambdaTerm
-      }
-
-      println(s"$debugName: ${f.structure}; sig = ${f.symbol.info.map(_.signature.structure)}")
-
-      f.collect {
-        case Term.Apply.After_4_6_0(g: Term.Name, _) => {
-          // println(s"$g symbol sig ${g.symbol.info.map(i => i.signature.structure)}") // this gets a class signature, it seems
-          println(">> Term.Apply(Term.Name) case")
-          buildFunc(g)
-        }
-      }.headOption.orElse(f match {
-        case f: Term.Name => {
-          println(">> Just Term.Name case")
-          buildFunc(f)
-          Some(Func.id) // TODO: replace with proper func
-        }
-        case _ => None
-      })
-    }
-
-    extractFunc0(f).getOrElse(Opaque(f))
-  }
-
   def apply(term: Term)(implicit env: Map[Symbol, NonTerminalTree], doc: SemanticDocument): Parser = term match {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
@@ -175,59 +137,47 @@ object Parser {
     case t if env.contains(t.symbol) => NonTerminal(t.symbol)
 
     // "string(s)"
-    case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) => {
+    case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) =>
       val s = str.text.stripPrefix("\"").stripSuffix("\"")
       Str(s)
-    }
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
     // "pure(x)"
     case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
     // "p.map(f)"
-    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) => {
-      val lambda = extractFunc(f, "MAP")
+    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) =>
+      val lambda = Func.buildFuncFromTerm(f, "MAP")
       FMap(apply(qual), lambda)
-    }
     // "p <|> q" or "p | q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
     // "p <*> q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<*>(_), _, Term.ArgClause(List(q), _)) => Ap(apply(p), apply(q))
 
     // "liftN(f, p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 2) => {
-      val lambda = extractFunc(f, "LIFT2_EXPLICIT")
-
+    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 2) =>
+      val lambda = Func.buildFuncFromTerm(f, "LIFT2_EXPLICIT")
       Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = false)
-    }
-    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 3) => {
-      val lambda = extractFunc(f, "LIFT3_EXPLICIT")
-
+    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 3) =>
+      val lambda = Func.buildFuncFromTerm(f, "LIFT3_EXPLICIT")
       Lift3(lambda, apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = false)
-    }
 
     // "f.lift(p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) => {
+    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) =>
       val func = f match {
         case Term.ApplyType.After_4_6_0(g, _) => g
         case _ => f
       }
-      val lambda = extractFunc(func, "LIFT2_IMPLICIT")
-
+      val lambda = Func.buildFuncFromTerm(func, "LIFT2_IMPLICIT")
       Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = true)
-    }
-    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) => {
-      val lambda = extractFunc(f, "LIFT3_IMPLICIT")
-
+    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) =>
+      val lambda = Func.buildFuncFromTerm(f, "LIFT3_IMPLICIT")
       Lift3(lambda, apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = true)
-    }
 
     // "(p1, ..., pN).zipped(f)"
-    case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) => {
-      val lambda = extractFunc(f, "ZIPPED")
-
+    case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
+      val lambda = Func.buildFuncFromTerm(f, "ZIPPED")
       // TODO actually put the correct parser in
       Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = true)
-    }
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)

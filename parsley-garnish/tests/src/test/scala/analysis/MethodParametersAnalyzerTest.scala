@@ -1,4 +1,4 @@
-package fix
+package analysis
 
 import org.scalactic.Equality
 import org.scalatest.Assertion
@@ -10,7 +10,7 @@ import scala.meta._
 import scala.meta.contrib._
 import scala.reflect.ClassTag
 
-import analysis.MethodParametersAnalyzer._
+import MethodParametersAnalyzer._
 
 class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
   implicit def termEq[T <: Term : ClassTag] = new Equality[T] {
@@ -22,8 +22,8 @@ class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
 
   // Custom equality objects are not applied recursively, so this has to be defined manually
   // see https://github.com/scalatest/scalatest/issues/917
-  implicit val funcArgEq = new Equality[FuncArg] {
-    def areEqual(a: FuncArg, b: Any): Boolean = a match {
+  implicit val funcArgEq = new Equality[FuncArgument] {
+    def areEqual(a: FuncArgument, b: Any): Boolean = a match {
       case ParameterArg(name, tpe) => b.isInstanceOf[ParameterArg] && name.isEqual(b.asInstanceOf[ParameterArg].name) && tpe == b.asInstanceOf[ParameterArg].tpe
       case ConcreteArg(arg, tpe) => b.isInstanceOf[ConcreteArg] && arg.isEqual(b.asInstanceOf[ConcreteArg].arg) && tpe == b.asInstanceOf[ConcreteArg].tpe
     }
@@ -56,10 +56,10 @@ class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
     assertNestedListsEqual(actual, expected)
   }
 
-  "labelFuncArgs" should "label each method argument as a parameter or concrete value" in {
+  "getFuncArguments" should "label each method argument as a parameter or concrete value" in {
     val term = q"(a, b) => c => f(a, 3)(b)(2, c)"
 
-    val actual = labelFuncArgs(term)
+    val actual = getFuncArguments(term)
     val expected = List(List(ParameterArg(Term.Name("a")), ConcreteArg(q"3")), List(ParameterArg(Term.Name("b"))), List(ConcreteArg(q"2"), ParameterArg(Term.Name("c"))))
 
     assertNestedListsEqual(actual, expected)
@@ -68,11 +68,11 @@ class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
   private def assertNestedListsEqual[A](actual: List[List[A]], expected: List[List[A]])(implicit eq: Equality[A]): Assertion = {
     actual should have length expected.length.toLong
 
-    forAll (actual.zip(expected)) { case (actualList, expectedList) =>
+    forAll(actual.zip(expected)) { case (actualList, expectedList) =>
       actualList should have length expectedList.length.toLong
-      forAll (actualList.zip(expectedList)) { case (actualVal, expectedParam) =>
-        actualVal should equal (expectedParam)
-      } 
+      forAll(actualList.zip(expectedList)) { case (actualVal, expectedParam) =>
+        actualVal should equal(expectedParam)
+      }
     }
   }
 }

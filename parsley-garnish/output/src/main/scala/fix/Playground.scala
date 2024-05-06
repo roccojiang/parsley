@@ -3,10 +3,7 @@ package fix
 import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
-import parsley.debug._
-
 import parsley.syntax.lift._
-import parsley.lift._
 import parsley.expr.chain
 
 object Playground {
