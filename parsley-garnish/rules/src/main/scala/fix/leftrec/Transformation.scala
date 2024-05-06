@@ -45,7 +45,9 @@ object Transformation {
       case Empty => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
       // TODO: import postfix if not in scope
-      case _ => Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
+      case _ =>
+        println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
+        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
     }
   }
 
@@ -118,21 +120,12 @@ object Transformation {
 
         case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
 
-        // TODO: these need to be uncurried, now that Funcs are represented properly, arglist lengths will not match up
-        case Lift2(f, p, q, _) => {
-          unfold0(visited, Pure(f) <*> p <*> q)
+        // TODO: don't just convert this into curried form with a chain of <*>s
+        case p: LiftLike => {
+          val liftedFunc: Parser = Pure(p.func)
+          val curried = p.parsers.foldLeft(liftedFunc)(_ <*> _)
+          unfold0(visited, curried)
         }
-        case Lift3(f, p, q, r, _) => {
-          unfold0(visited, Pure(f) <*> p <*> q <*> r)
-        }
-
-        // TODO: don't just convert this into curried form with a chain of <*>s?
-        // case LiftN(f, ps, _) => {
-        //   // val parsers: List[Parser[A]] = Pure(f) +: ps
-        //   // val curried = parsers.reduceLeft((x: Parser[A => A], y: Parser[A]) => x <*> y)
-        //   val curried = ps.foldLeft(Pure(f))(_ <*> _)
-        //   unfold0(visited, curried)
-        // }
 
         case Choice(p, q) => unfoldChoice(p, q)
         case Ap(p, q) => unfoldAp(p, q)

@@ -8,6 +8,7 @@ import parsley.character._
 import parsley.lift._
 import parsley.syntax.lift._
 import parsley.syntax.zipped._
+import parsley.expr.chain
 
 object SyntheticsTest {
   sealed trait Expr
@@ -15,7 +16,7 @@ object SyntheticsTest {
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
 
-  // lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a)))
+  lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a)))
 
   case class One(a: String)
   case class OneGeneric[A](a: A)
@@ -25,9 +26,9 @@ object SyntheticsTest {
   case class DoubleGenericCurried[A, B](a: A)(b: B)
   case class TripleGenericPartialCurried[A, B](a: A)(b: Boolean, c: B)
 
-  val implicitLift = DoubleGeneric[Int, String].lift(pure(1), string("a"))
+  // val implicitLift = DoubleGeneric[Int, String].lift(pure(1), string("a"))
 
-  val explicitLift = lift2(DoubleGeneric[Int, String](_, _), pure(1), string("a"))
+  // val explicitLift = lift2(DoubleGeneric[Int, String](_, _), pure(1), string("a"))
   
   // val zipped = (pure(1), string("a")).zipped(DoubleGeneric(_, _))
   // val zippedCurried = (string("a"), pure(1)).zipped(DoubleCurried(_)(_))

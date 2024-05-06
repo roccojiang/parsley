@@ -20,20 +20,33 @@ sealed abstract class Func extends Product with Serializable {
     case _ => this
   }
 
-  def simplify: Func = this match {
+  def simplify: Func = if (this.normal) this else this.reduce
+
+  def reduce: Func = this match {
     // Beta reduction rule
-    case App(Lam(xs, f), ys @ _*) => {
+    case App(Lam(xs, f), ys @ _*) =>
       // TODO: better error handling than this
       assert(xs.length == ys.length, "Incorrect number of arguments")
+      println(s"SIMPLIFYING $this")
 
-      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.simplify
+      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
+
+    case App(f, xs @ _*) => f.reduce match {
+      case g: Lam => App(g, xs.map(_.reduce): _*).reduce
+      case g => App(g, xs.map(_.reduce): _*)
     }
-
-    case App(f, xs @ _*) => App(f.simplify, xs.map(_.simplify): _*)
-    case Lam(xs, f) => Lam(xs, f.simplify)
+    case Lam(xs, f) => Lam(xs, f.reduce)
 
     case _ => this
   }
+
+  private def normal: Boolean = this match {
+    case App(Lam(_, _), _) => false
+    case App(f, xs @ _*) => f.normal && xs.forall(_.normal)
+    case _ => true
+  }
+
+  override def toString: String = term.syntax
 }
 
 object Func {
@@ -53,7 +66,7 @@ object Func {
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
   case class Lam(xs: List[Var], f: Func) extends Func {
     val term = {
-      val params = xs.map(x => Term.Param(List.empty, x.term, None, None))
+      val params = xs.map(x => Term.Param(List.empty, x.term, x.displayType.map(t => Type.Name(t.toString)), None))
       q"(..$params) => ${f.term}"
     }
   }
@@ -138,8 +151,7 @@ object Func {
       }.headOption.orElse(f match {
         case f: Term.Name =>
           println(">> Just Term.Name case")
-          buildFunc(f)
-          Some(Func.id) // TODO: replace with proper func
+          Some(buildFunc(f))
         case _ => None
       })
     }

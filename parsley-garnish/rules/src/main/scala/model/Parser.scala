@@ -57,6 +57,8 @@ sealed abstract class Parser extends Product with Serializable {
       case _ => this
     }
   }
+
+  override def toString: String = term.syntax
 }
 
 object Parser {
@@ -106,24 +108,25 @@ object Parser {
     val term = q"chain.postfix[$tpe](${p.term})(${op.term})"
   }
 
-  // TODO: collapse these back down into a single case class
-  sealed trait LiftN extends Parser
+  /* f: (T1, T2, ..., TN) => R, pN: Parser[TN], f.lift(ps) : Parser[R] */
+  sealed trait LiftLike extends Parser {
+    def func: Func
+    def parsers: List[Parser]
+  }
 
-  /* f: Func[A => B => R], p1: Parser[A], p2: Parser[B], lift2(f, p1, p2): Parser[R] */
-  final case class Lift2(f: Func, p1: Parser, p2: Parser, isImplicit: Boolean) extends LiftN {
-    val term = if (isImplicit) {
-      q"${f.term}.lift(${p1.term}, ${p2.term})"
-    } else {
-      q"lift2(${f.term}, ${p1.term}, ${p2.term})"
+  final case class LiftImplicit(func: Func, parsers: List[Parser]) extends LiftLike {
+    val term = q"${func.term}.lift(..${parsers.map(_.term)})"
+  }
+
+  final case class LiftExplicit(func: Func, parsers: List[Parser]) extends LiftLike {
+    val term = {
+      val liftN = Term.Name(s"lift${parsers.length}")
+      q"$liftN(${func.term}, ..${parsers.map(_.term)})"
     }
   }
 
-  final case class Lift3(f: Func, p1: Parser, p2: Parser, p3: Parser, isImplicit: Boolean) extends LiftN {
-    val term = if (isImplicit) {
-      q"${f.term}.lift(${p1.term}, ${p2.term}, ${p3.term})"
-    } else {
-      q"lift3(${f.term}, ${p1.term}, ${p2.term}, ${p3.term})"
-    }
+  final case class Zipped(func: Func, parsers: List[Parser]) extends LiftLike {
+    val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
@@ -154,30 +157,23 @@ object Parser {
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<*>(_), _, Term.ArgClause(List(q), _)) => Ap(apply(p), apply(q))
 
     // "liftN(f, p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 2) =>
+    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
       val lambda = Func.buildFuncFromTerm(f, "LIFT2_EXPLICIT")
-      Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = false)
-    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) if (ps.length == 3) =>
-      val lambda = Func.buildFuncFromTerm(f, "LIFT3_EXPLICIT")
-      Lift3(lambda, apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = false)
+      LiftExplicit(lambda, ps.map(apply))
 
     // "f.lift(p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) =>
+    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) =>
       val func = f match {
         case Term.ApplyType.After_4_6_0(g, _) => g
         case _ => f
       }
       val lambda = Func.buildFuncFromTerm(func, "LIFT2_IMPLICIT")
-      Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = true)
-    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) =>
-      val lambda = Func.buildFuncFromTerm(f, "LIFT3_IMPLICIT")
-      Lift3(lambda, apply(ps(0)), apply(ps(1)), apply(ps(2)), isImplicit = true)
+      LiftImplicit(lambda, ps.map(apply))
 
     // "(p1, ..., pN).zipped(f)"
     case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
       val lambda = Func.buildFuncFromTerm(f, "ZIPPED")
-      // TODO actually put the correct parser in
-      Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = true)
+      Zipped(lambda, ps.map(apply))
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
