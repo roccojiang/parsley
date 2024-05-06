@@ -1,4 +1,4 @@
-package fix.utils
+package utils
 
 import scalafix.v1.SymbolMatcher
 

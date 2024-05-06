@@ -10,6 +10,13 @@ import parsley.syntax.lift._
 import parsley.syntax.zipped._
 
 object SyntheticsTest {
+  sealed trait Expr
+  case class Add(a: Expr, b: Expr) extends Expr
+  case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
+  case class Atom(a: String) extends Expr
+
+  // lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a)))
+
   case class One(a: String)
   case class OneGeneric[A](a: A)
   case class Double(a: String, b: Int)
@@ -18,13 +25,13 @@ object SyntheticsTest {
   case class DoubleGenericCurried[A, B](a: A)(b: B)
   case class TripleGenericPartialCurried[A, B](a: A)(b: Boolean, c: B)
 
-  // val implicitLift = DoubleGeneric[Int, String].lift(pure(1), string("a"))
+  val implicitLift = DoubleGeneric[Int, String].lift(pure(1), string("a"))
 
-  // val explicitLift = lift2(DoubleGeneric[Int, String](_, _), pure(1), string("a"))
+  val explicitLift = lift2(DoubleGeneric[Int, String](_, _), pure(1), string("a"))
   
   // val zipped = (pure(1), string("a")).zipped(DoubleGeneric(_, _))
   // val zippedCurried = (string("a"), pure(1)).zipped(DoubleCurried(_)(_))
-  val zippedLambda = (pure(1), string("a")).zipped((x, y) => DoubleGeneric(x, y))
+  // val zippedLambda = (pure(1), string("a")).zipped((x, y) => DoubleGeneric(x, y))
   
   // val map = string("a").map(One(_))
   // val mapGeneric = string("a").map(OneGeneric(_))

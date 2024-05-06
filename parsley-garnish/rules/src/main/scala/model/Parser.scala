@@ -1,15 +1,16 @@
-package fix.utils
+package model
 
 import scala.meta._
 import scalafix.v1._
 
-import Func._
-import NonTerminalDetection.NonTerminalTree
-import TypeUtils._
+import analysis.MethodParametersAnalyzer
+import analysis.TypeSignatureAnalyzer.collectInferredType
+import model.Func._, model.Parser._
+import utils.Matchers
+import fix.leftrec.NonTerminalDetection.NonTerminalTree
 
 sealed abstract class Parser extends Product with Serializable {
-  import Parser._
-  
+
   def term: Term
 
   def simplify: Parser = {
@@ -17,7 +18,7 @@ sealed abstract class Parser extends Product with Serializable {
     /* p: Parser[B], f: B => C, p.map(f): Parser[C] */
     def simplifyMap(parser: FMap): Parser = {
       val FMap(p, f) = parser
-      
+
       p match {
         case Empty => Empty
         case Pure(x) => Pure(App(f.simplify, x.simplify).simplify)
@@ -34,22 +35,22 @@ sealed abstract class Parser extends Product with Serializable {
     }
 
     this match {
-      case Choice(p, Empty)   => p.simplify
-      case Choice(Empty, q)   => q.simplify
+      case Choice(p, Empty) => p.simplify
+      case Choice(Empty, q) => q.simplify
       case Choice(Pure(f), _) => Pure(f.simplify)
-      case Choice(p, q)       => Choice(p.simplify, q.simplify)
+      case Choice(p, q) => Choice(p.simplify, q.simplify)
 
-      case Ap(Empty, _)         => Empty
+      case Ap(Empty, _) => Empty
       case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify).simplify)
-      case Ap(Pure(f), x)       => FMap(x.simplify, f.simplify)
-      case Ap(p, q)             => Ap(p.simplify, q.simplify)
+      case Ap(Pure(f), x) => FMap(x.simplify, f.simplify)
+      case Ap(p, q) => Ap(p.simplify, q.simplify)
 
-      case p @ FMap(_, _) => simplifyMap(p)
+      case p@FMap(_, _) => simplifyMap(p)
 
       // case Many(Empty)      => Empty
       // case Many(p)          => Many(p.simplify)
 
-      case Postfix(tpe, p, op)    => Postfix(tpe, p.simplify, op.simplify)
+      case Postfix(tpe, p, op) => Postfix(tpe, p.simplify, op.simplify)
 
       // case LiftN(f, ps, isImplicit) => LiftN(f.simplify, ps.map(_.simplify), isImplicit)
 
@@ -59,6 +60,7 @@ sealed abstract class Parser extends Product with Serializable {
     }
   }
 }
+
 object Parser {
   final case class NonTerminal(val ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName) // TODO: I think this is correct, but needs checking
@@ -108,6 +110,7 @@ object Parser {
 
   // TODO: collapse these back down into a single case class
   sealed trait LiftN extends Parser
+
   /* f: Func[A => B => R], p1: Parser[A], p2: Parser[B], lift2(f, p1, p2): Parser[R] */
   final case class Lift2(f: Func, p1: Parser, p2: Parser, isImplicit: Boolean) extends LiftN {
     val term = if (isImplicit) {
@@ -116,6 +119,7 @@ object Parser {
       q"lift2(${f.term}, ${p1.term}, ${p2.term})"
     }
   }
+
   final case class Lift3(f: Func, p1: Parser, p2: Parser, p3: Parser, isImplicit: Boolean) extends LiftN {
     val term = if (isImplicit) {
       q"${f.term}.lift(${p1.term}, ${p2.term}, ${p3.term})"
@@ -136,9 +140,9 @@ object Parser {
         val typeSignature = collectInferredType(g)
         println(s">> typeSignature: $typeSignature")
         // val lambdaTerm = fromTypeSignature(Opaque(g), typeSignature)
-        val funcArgs = FuncUtils.labelFuncArgs(f)
-        val args = FuncUtils.labelFuncArgTypes(funcArgs, typeSignature)
-        val lambdaTerm = FuncUtils.toFunc(Opaque(g), args)
+        val funcArgs = MethodParametersAnalyzer.labelFuncArgs(f)
+        val args = MethodParametersAnalyzer.labelFuncArgTypes(funcArgs, typeSignature)
+        val lambdaTerm = Func.toFunc(Opaque(g), args)
         println(s">> LAMBDATERM: $lambdaTerm")
         lambdaTerm
       }
@@ -203,11 +207,12 @@ object Parser {
 
     // "f.lift(p1, ..., pN)"
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 2) => {
-      val lambda = extractFunc(f, "LIFT2_IMPLICIT")
+      val func = f match {
+        case Term.ApplyType.After_4_6_0(g, _) => g
+        case _ => f
+      }
+      val lambda = extractFunc(func, "LIFT2_IMPLICIT")
 
-      // f collect {
-      //   case Term.Apply.After_4_6_0(g, _) => println(s"$g func within lift: ${g.synthetics} | ${g.synthetics.structure}") // TODO: this doesn't exist, since f is a Term.Name
-      // }
       Lift2(lambda, apply(ps(0)), apply(ps(1)), isImplicit = true)
     }
     case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) if (ps.length == 3) => {
@@ -230,7 +235,9 @@ object Parser {
 
   implicit class ParserOps(p: Parser) {
     def <*>(q: Parser): Parser = Ap(p, q).simplify
+
     def <|>(q: Parser): Parser = Choice(p, q).simplify
+
     def map(f: Func): Parser = FMap(p, f).simplify
   }
 }

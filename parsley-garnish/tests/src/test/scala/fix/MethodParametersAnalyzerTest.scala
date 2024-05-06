@@ -10,9 +10,9 @@ import scala.meta._
 import scala.meta.contrib._
 import scala.reflect.ClassTag
 
-import utils.FuncUtils._
+import analysis.MethodParametersAnalyzer._
 
-class FuncUtilsTest extends AnyFlatSpec with Matchers {
+class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
   implicit def termEq[T <: Term : ClassTag] = new Equality[T] {
     def areEqual(a: T, b: Any): Boolean = b match {
       case t: T => a.isEqual(t)

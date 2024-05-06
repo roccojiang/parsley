@@ -1,10 +1,12 @@
-package fix.utils
+package model
 
-import scala.meta._
 import scalafix.v1._
 
+import scala.meta._
+import Func._
+import analysis.MethodParametersAnalyzer.{ConcreteArg, FuncArg, ParameterArg}
+
 sealed abstract class Func extends Product with Serializable {
-  import Func._
 
   def term: Term
 
@@ -55,7 +57,7 @@ object Func {
   }
   object Lam {
     /* x: T, f: R, \x.f : T => R */
-    def apply[A, B](x: Var, f: Func): Func = Lam(List(x), f)
+    def apply(x: Var, f: Func): Func = Lam(List(x), f)
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
@@ -87,7 +89,26 @@ object Func {
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
 
-  // def compose[A, B, C](f: Func[B => C])(g: Func[A => B]): Func[A => C] = {
-  //   App(App(compose[A, B, C], f), g)
-  // }
+  def toFunc(f: Opaque, args: List[List[FuncArg]]): Func = {
+    // alpha conversion: assign fresh variable names
+    val freshArgs = args.map(_.map {
+      case ParameterArg(_, tpe) => ParameterArg(Term.fresh(), tpe)
+      case arg => arg
+    })
+
+    val apps = freshArgs.foldLeft(f: Func) { (acc, args) => {
+      val params = args.map {
+        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
+        case ConcreteArg(arg, _)     => Opaque(arg)
+      }
+      App(acc, params: _*)
+    }}
+
+    freshArgs.foldRight(apps) { (args, acc) => {
+      val params = args.collect {
+        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
+      }
+      if (params.isEmpty) acc else Lam(params, acc)
+    }}
+  }
 }

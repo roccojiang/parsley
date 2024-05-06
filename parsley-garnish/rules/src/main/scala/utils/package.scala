@@ -1,9 +1,33 @@
-package fix
-
 import scalafix.v1._
 import scala.meta._
 
+import PartialFunction.cond
+
 package object utils {
+  def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
+    // which symbols have value/method signatures seems to differ between scala versions
+    case ValueSignature(tpe)               => Some(tpe)
+    case MethodSignature(_, _, returnType) => Some(returnType)
+    // do ClassSignatures hold any useful info?
+    case _ => None
+  }
+
+  /** Retrieves the type of which a Parsley parser would return,
+   * i.e. returns the name of type T given a symbol with type Parsley[T].
+   */
+  def getParsleyType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
+    s.info.flatMap(info => getSemanticType(info.signature)).collect {
+      case TypeRef(_, Matchers.parsley(_), List(t)) => Type.Name(t.toString)
+    }
+  }
+
+  def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
+    case Some(info) => cond(getSemanticType(info.signature)) {
+      // parameterised type: Parsley[_]
+      case Some(TypeRef(_, Matchers.parsley(_), _)) => true
+    }
+  }
+
   def recursivelyPrintSynthetics(t: Term)(implicit doc: SemanticDocument): Unit = {
     println(s"synthetics $t: ${t.synthetics}")
 

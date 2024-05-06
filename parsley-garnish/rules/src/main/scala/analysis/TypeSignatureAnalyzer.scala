@@ -1,36 +1,9 @@
-package fix.utils
+package analysis
 
 import scala.meta._
 import scalafix.v1._
 
-import Func._
-
-import PartialFunction.cond
-
-object TypeUtils {
-  def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
-    // which symbols have value/method signatures seems to differ between scala versions
-    case ValueSignature(tpe)               => Some(tpe)
-    case MethodSignature(_, _, returnType) => Some(returnType)
-    // do ClassSignatures hold any useful info?
-    case _ => None
-  }
-
-  /** Retrieves the type of which a Parsley parser would return,
-    * i.e. returns the name of type T given a symbol with type Parsley[T].
-   */
-  def getParsleyType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
-    s.info.flatMap(info => getSemanticType(info.signature)).collect {
-      case TypeRef(_, Matchers.parsley(_), List(t)) => Type.Name(t.toString)
-    }
-  }
-
-  def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
-    case Some(info) => cond(getSemanticType(info.signature)) {
-      // parameterised type: Parsley[_]
-      case Some(TypeRef(_, Matchers.parsley(_), _)) => true
-    }
-  }
+object TypeSignatureAnalyzer {
 
   // In Scala 3, this could be an opaque type
   sealed trait MethodParamType
@@ -38,18 +11,16 @@ object TypeUtils {
   case class ConcreteType(tpe: SemanticType) extends MethodParamType
   
   def extractParamListsTypes(info: SymbolInformation): List[List[MethodParamType]] = info.signature match {
-    case MethodSignature(genericTypeParams, paramLists, _) => {
+    case MethodSignature(genericTypeParams, paramLists, _) =>
       val genericTypeParamSymbols = genericTypeParams.map(_.symbol).toSet
       paramLists.map(_.collect(_.signature match {
         case ValueSignature(tpe) => tpe match {
-          case TypeRef(_, sym, _) => {
+          case TypeRef(_, sym, _) =>
             if (genericTypeParamSymbols contains sym) GenericType(tpe)
             else ConcreteType(tpe)
-          }
           case _ => ConcreteType(tpe)
         }
       }))
-    }
     case _ => List.empty
   }
 
@@ -57,6 +28,12 @@ object TypeUtils {
     val synthetics = term.synthetics
     val typeList = synthetics collect {
       // TODO: cases other than SelectTree - need to make this work for more than just .apply methods
+      // same as below case but wrapped in an ApplyTree for some reason - seems to happen with XXX.lift(x, y, z) implicit lift syntax?
+      case ApplyTree(TypeApplyTree(SelectTree(_, IdTree(info)), typeArgs), _) => {
+        val concreteTypeArgs = typeArgs.map(ConcreteType(_))
+        val signatureShape = extractParamListsTypes(info)
+        substituteTypes(signatureShape, concreteTypeArgs)
+      }
       // method had generic parameters
       case TypeApplyTree(SelectTree(_, IdTree(info)), typeArgs) => {
         val concreteTypeArgs = typeArgs.map(ConcreteType(_))
