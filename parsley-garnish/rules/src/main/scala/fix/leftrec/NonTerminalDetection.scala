@@ -1,21 +1,24 @@
-package fix.utils
+package fix.leftrec
 
 import scala.meta._
 import scalafix.v1._
 
+import utils.{getParsleyType, isParsleyType}
+
 object NonTerminalDetection {
 
-  case class NonTerminalTree(name: Term.Name, body: Term, originalTree: Defn)
+  case class NonTerminalTree(name: Term.Name, body: Term, tpe: Type.Name, originalTree: Defn)
 
   def getNonTerminals(implicit doc: SemanticDocument): Map[Symbol, NonTerminalTree] = {
     def collectVars(vars: List[Pat], body: Term, originalTree: Defn) = {
       vars.collect {
         case Pat.Var(varName) if isParsleyType(varName.symbol) =>
-          varName.symbol -> NonTerminalTree(varName, body, originalTree)
+          val tpe = getParsleyType(varName.symbol)
+          assert(tpe.isDefined, s"expected a Parsley type for $varName, got ${varName.symbol.info.get.signature}")
+
+          varName.symbol -> NonTerminalTree(varName, body, tpe.get, originalTree)
       }
     }
-
-    // doc.tree.children
 
     doc.tree.collect {
       // see https://scalameta.org/docs/semanticdb/specification.html#symbol for symbol uniqueness guarantees

@@ -6,10 +6,7 @@ package fix
 import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
-import parsley.debug._
-
 import parsley.syntax.lift._
-import parsley.lift._
 import parsley.expr.chain
 
 object Playground {
@@ -28,8 +25,12 @@ object Playground {
   lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(Atom(_))) | string("b").map(Atom(_))
 
   lazy val s: Parsley[Expr] = Wow.lift(s, string("a").map(Atom(_)), string("b").map(Atom(_))) | string("c").map(Atom(_))
+
   // lazy val s2: Parsley[Expr] = chain.postfix(string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val s2: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))((pure(identity[Expr] _).map(Wow.curried.compose(_)).map(flip(_)) <*> string("a").map(Atom(_))).map(flip(_)) <*> string("b").map(Atom(_)))
+
+  lazy val s3 = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
+  lazy val s4 = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map((b) => (c: Expr) => (a) => Wow(a, b, c)) <*> string("b").map(Atom(_)))
 
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
 
@@ -46,6 +47,7 @@ object Playground {
   
   // TODO: figure out how to convert r2 to rManual - definition of as = this *> pure(x)  or  this.map(_ => x)
   lazy val rManual = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").as(Add(_, Atom("a"))))
+  lazy val rManual2 = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(s => Add(_, Atom(s)))) // .map(s => e => Add(e, Atom(s)))
 
 
   val add1 = pure(identity[Expr] _).map(Add.curried.compose(_))
@@ -73,7 +75,11 @@ object Playground {
   // lazy val useless2: Parsley[String] = chain.postfix[String](empty)(pure(identity[String] _).map((_: String => "a").compose(_))) // === chain.postfix(empty)(pure(_ => "a"))
  
   def main(args: Array[String]): Unit = {
-    println(simpleBadPostfix.parse("aaa"))
+    val input = "cabab"
+    println(s3.parse(input))
+    println(s4.parse(input))
+
+    // println(simpleBadPostfix.parse("aaa"))
     
     // val input = "parse"
 
