@@ -1,12 +1,9 @@
-package fix
-
 import scalafix.v1._
 import scala.meta._
 
 import PartialFunction.cond
 
 package object utils {
-
   def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
     // which symbols have value/method signatures seems to differ between scala versions
     case ValueSignature(tpe)               => Some(tpe)
@@ -15,9 +12,12 @@ package object utils {
     case _ => None
   }
 
-  def getSymbolType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
+  /** Retrieves the type of which a Parsley parser would return,
+   * i.e. returns the name of type T given a symbol with type Parsley[T].
+   */
+  def getParsleyType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
     s.info.flatMap(info => getSemanticType(info.signature)).collect {
-      case TypeRef(_, _, List(t)) => Type.Name(t.toString)
+      case TypeRef(_, Matchers.parsley(_), List(t)) => Type.Name(t.toString)
     }
   }
 

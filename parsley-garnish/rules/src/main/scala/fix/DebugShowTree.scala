@@ -3,8 +3,7 @@ package fix
 import scala.meta._
 import scalafix.v1._
 
-import fix.utils.Matchers
-import fix.utils.Parser._
+import utils.Matchers
 
 class DebugShowTree extends SemanticRule("DebugShowTree") {
   override def fix(implicit doc: SemanticDocument): Patch = {

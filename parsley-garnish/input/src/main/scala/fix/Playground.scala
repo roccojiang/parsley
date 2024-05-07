@@ -6,10 +6,7 @@ package fix
 import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
-import parsley.debug._
-
 import parsley.syntax.lift._
-import parsley.lift._
 import parsley.expr.chain
 
 object Playground {
@@ -51,7 +48,6 @@ object Playground {
   // TODO: figure out how to convert r2 to rManual - definition of as = this *> pure(x)  or  this.map(_ => x)
   lazy val rManual = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").as(Add(_, Atom("a"))))
   lazy val rManual2 = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(s => Add(_, Atom(s)))) // .map(s => e => Add(e, Atom(s)))
-
 
 
   val add1 = pure(identity[Expr] _).map(Add.curried.compose(_))
