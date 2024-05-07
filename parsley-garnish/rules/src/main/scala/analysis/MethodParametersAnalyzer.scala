@@ -47,8 +47,8 @@ object MethodParametersAnalyzer {
   }
 
   /** Attempts to match each argument with its corresponding type in the given type signature.
-   * If the shape of the type signature does not match up, the list of arguments takes precedence,
-   * and they will be returned without having their types updated.
+    * If the shape of the type signature does not match up, the list of arguments takes precedence,
+    * and they will be returned without having their types updated.
    */
   def updateFuncArgTypes(argsLists: List[List[FuncArgument]], typeSignature: TypeSignature): List[List[FuncArgument]] = {
     if (argsLists.length != typeSignature.length) argsLists

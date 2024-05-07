@@ -92,7 +92,9 @@ object Transformation {
           val llr = pl.map(flip) <*> q
           val rlr = pe match {
             case None => Empty
-            case Some(f) => ql.map(App(compose, f))
+            case Some(f) => {
+              ql.map(composeH(f))
+            }
           }
 
           llr <|> rlr
@@ -121,11 +123,16 @@ object Transformation {
         case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
 
         // TODO: don't just convert this into curried form with a chain of <*>s
-        case p: LiftLike => {
+        case p: LiftLike =>
+          println(s"HELLO $p")
           val liftedFunc: Parser = Pure(p.func)
-          val curried = p.parsers.foldLeft(liftedFunc)(_ <*> _)
-          unfold0(visited, curried)
-        }
+          val curriedAp = p.parsers.foldLeft(liftedFunc)(_ <*> _)
+          println(s"CURRIED $curriedAp")
+
+          val pair: (Any, Parser) = (Pure(p.func), p.parsers.head)
+          val curried = p.parsers.tail.foldLeft(pair)((_, _))
+          // println(curried)
+          unfold0(visited, curriedAp)
 
         case Choice(p, q) => unfoldChoice(p, q)
         case Ap(p, q) => unfoldAp(p, q)

@@ -13,7 +13,8 @@ object SyntheticsTest {
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
 
-  // lazy val r: Parsley[Expr] = chain.postfix[Expr](empty)(string("a").map((fresh19 => fresh20 => Atom(fresh19(fresh20)))(fresh16 => fresh17 => Add(fresh17)(fresh16))))
+  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom))(string("a").map(fresh22 => Atom((fresh19: Expr) => Add.curried(fresh19)(fresh22))))
+
 
   case class One(a: String)
   case class OneGeneric[A](a: A)

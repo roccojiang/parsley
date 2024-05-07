@@ -16,7 +16,12 @@ object SyntheticsTest {
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
 
-  lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a)))
+  // lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a))) // TODO: converting to Func doesn't work with the lift, so this breaks the shape of the functions as it's just inferred as a Opaque(Add)
+  lazy val r: Parsley[Expr] = (r, string("a").map(a => Atom(a))).zipped((x, y) => Add(x, y)) | string("b").map(Atom(_))
+
+  // lazy val t: Parsley[Expr] = chain.postfix[Expr](empty)(string("a").map((fresh20 => fresh21 => fresh22 => fresh20(fresh21(fresh22)))((fresh3: String) => Atom(fresh3))((fresh17 => fresh18 => fresh19 => fresh17(fresh19)(fresh18))((fresh8 => fresh9 => fresh10 => fresh8(fresh9(fresh10)))((fresh1: Expr) => (fresh2: Expr) => Add(fresh1)(fresh2))(fresh4 => fresh4)))))
+
+  // lazy val s: Parsley[Expr] = (s, pure(Atom("a")), pure(Atom("b"))).zipped((x, y, z) => Wow(x, y, z))
 
   case class One(a: String)
   case class OneGeneric[A](a: A)

@@ -11,51 +11,41 @@ sealed abstract class Parser extends Product with Serializable {
 
   def term: Term
 
-  def simplify: Parser = {
+  def simplify: Parser = this match {
+    // p <|> empty == p
+    case Choice(p, Empty) => p.simplify
+    // empty <|> q == q
+    case Choice(Empty, q) => q.simplify
+    // pure(f) <|> u == pure(f)
+    case Choice(Pure(f), _) => Pure(f).simplify
+    case Choice(p, q) => Choice(p.simplify, q.simplify)
 
-    /* p: Parser[B], f: B => C, p.map(f): Parser[C] */
-    def simplifyMap(parser: FMap): Parser = {
-      val FMap(p, f) = parser
+    // empty <*> u == empty
+    case Ap(Empty, _) => Empty
+    // pure(f) <*> pure(x) == pure(f(x))
+    case Ap(Pure(f), Pure(x)) => Pure(App(f, x)).simplify
+    // pure(f) <*> x == x.map(f)
+    case Ap(Pure(f), x) => FMap(x, f).simplify
+    case Ap(p, q) => Ap(p.simplify, q.simplify)
 
-      p match {
-        case Empty => Empty
-        case Pure(x) => Pure(App(f.simplify, x.simplify).simplify)
-        // p.map(g).map(f) = p.map(f.compose(g))
-        // g: D => B
-        case FMap(p, g: Func) => {
-          // FMap(p, App(App(compose[D, B, C], g), f))  // ???
-          // val x = Var[D](Term.fresh())
-          // FMap(p, Lam(x, App(f, App(g, x)))).simplify
-          FMap(p, App(App(compose, g), f))
-        }
-        case p => FMap(p.simplify, f.simplify)
-      }
-    }
+    // TODO: prove empty.map(f) == empty
+    case FMap(Empty, _) => Empty
+    // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
+    case FMap(Pure(x), f) => Pure(App(f, x)).simplify
+    // p.map(f).map(g) == p.map(g compose f)
+    case FMap(FMap(p, f), g) => FMap(p, composeH(g, f)).simplify
+    case FMap(p, f) => FMap(p.simplify, f.simplify)
 
-    this match {
-      case Choice(p, Empty) => p.simplify
-      case Choice(Empty, q) => q.simplify
-      case Choice(Pure(f), _) => Pure(f.simplify)
-      case Choice(p, q) => Choice(p.simplify, q.simplify)
+    // case Many(Empty)      => Empty
+    // case Many(p)          => Many(p.simplify)
 
-      case Ap(Empty, _) => Empty
-      case Ap(Pure(f), Pure(x)) => Pure(App(f.simplify, x.simplify).simplify)
-      case Ap(Pure(f), x) => FMap(x.simplify, f.simplify)
-      case Ap(p, q) => Ap(p.simplify, q.simplify)
+    case Postfix(tpe, p, op) => Postfix(tpe, p.simplify, op.simplify)
 
-      case p@FMap(_, _) => simplifyMap(p)
+    // case LiftN(f, ps, isImplicit) => LiftN(f.simplify, ps.map(_.simplify), isImplicit)
 
-      // case Many(Empty)      => Empty
-      // case Many(p)          => Many(p.simplify)
+    case Pure(f) => Pure(f.simplify)
 
-      case Postfix(tpe, p, op) => Postfix(tpe, p.simplify, op.simplify)
-
-      // case LiftN(f, ps, isImplicit) => LiftN(f.simplify, ps.map(_.simplify), isImplicit)
-
-      case Pure(f) => Pure(f.simplify)
-
-      case _ => this
-    }
+    case _ => this
   }
 
   override def toString: String = term.syntax

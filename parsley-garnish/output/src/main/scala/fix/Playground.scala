@@ -25,6 +25,9 @@ object Playground {
   // lazy val rOldOut: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(Atom(_)).map((fresh15 => fresh16 => fresh17 => fresh15(fresh17)(fresh16))((fresh6 => fresh7 => fresh8 => fresh6(fresh7(fresh8)))(Add)(fresh2 => fresh2))))
   lazy val rOutFixed: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(fresh18 => fresh17 => Add(fresh17, Atom(fresh18))))
 
+  // TODO: why do fresh53 and fresh54 not have types associated with them?
+  lazy val st: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom))(string("a").map(fresh57 => (fresh53: Expr) => (fresh54: Expr) => Wow.curried(fresh54)(Atom(fresh57))(fresh53)) <*> string("b").map(Atom))
+
   lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(flip(Wow.curried)).map(flip(_)) <*> string("b").map(Atom(_)))
   lazy val sPrime: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(Atom(_)).map(Wow.curried) <*> string("b").map(Atom(_)))
 

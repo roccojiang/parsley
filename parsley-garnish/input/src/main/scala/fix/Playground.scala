@@ -50,7 +50,6 @@ object Playground {
   lazy val rManual2 = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(s => Add(_, Atom(s)))) // .map(s => e => Add(e, Atom(s)))
 
 
-
   val add1 = pure(identity[Expr] _).map(Add.curried.compose(_))
   val add2 = pure(Add.curried)
   val flipped = add2.map(flip(_))

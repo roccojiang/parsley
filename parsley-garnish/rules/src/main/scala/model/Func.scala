@@ -20,6 +20,7 @@ sealed abstract class Func extends Product with Serializable {
     case _ => this
   }
 
+  // TODO: figure out the correct reduction/normalisation strategy
   def simplify: Func = if (this.normal) this else this.reduce
 
   def reduce: Func = this match {
@@ -27,9 +28,12 @@ sealed abstract class Func extends Product with Serializable {
     case App(Lam(xs, f), ys @ _*) =>
       // TODO: better error handling than this
       assert(xs.length == ys.length, "Incorrect number of arguments")
-      println(s"SIMPLIFYING $this")
 
-      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
+      val reduced = xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
+      println(s"SIMPLIFYING: $this")
+      println(s"REDUCED: $reduced")
+
+      reduced
 
     case App(f, xs @ _*) => f.reduce match {
       case g: Lam => App(g, xs.map(_.reduce): _*).reduce
@@ -104,6 +108,9 @@ object Func {
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
 
+  def composeH(f: Func /* B => C */): Func /* (A => B) => A => C) */ = App(compose, f)
+  def composeH(f: Func /* B => C */, g: Func /* A => B */): Func /* A => C */ = App(App(compose, f), g)
+
   private def toFunc(f: Opaque, args: List[List[FuncArgument]]): Func = {
     // alpha conversion: assign fresh variable names
     val freshArgs = args.map(_.map {
@@ -135,7 +142,9 @@ object Func {
       val funcArgs = MethodParametersAnalyzer.getFuncArguments(f)
       val funcArgsWithTypes = MethodParametersAnalyzer.updateFuncArgTypes(funcArgs, typeSignature)
 
-      val lambdaTerm = Func.toFunc(Opaque(g), funcArgsWithTypes)
+      val curriedArgs = funcArgsWithTypes.flatten.map(List(_))
+
+      val lambdaTerm = Func.toFunc(Opaque(g), curriedArgs)
       println(s">> LAMBDATERM: $lambdaTerm")
       lambdaTerm
     }
