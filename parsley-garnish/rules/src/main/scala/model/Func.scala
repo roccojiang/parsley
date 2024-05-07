@@ -51,7 +51,7 @@ sealed abstract class Func extends Product with Serializable {
   }
 
   private def normal: Boolean = this match {
-    case App(Lam(_, _), _) => false
+    case App(Lam(_, _), _*) => false
     case App(f, xs @ _*) => f.normal && xs.forall(_.normal)
     case _ => true
   }

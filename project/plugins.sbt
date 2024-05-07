@@ -22,7 +22,7 @@ addSbtPlugin("org.typelevel" % "sbt-typelevel-site" % sbtTypelevelVersion)
 
 // parsley-garnish
 // resolvers += Resolver.sonatypeRepo("releases")
-addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.12.0")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.12.1")
 
 // CI Stuff
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.13.2")
