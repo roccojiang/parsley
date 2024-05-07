@@ -14,7 +14,13 @@ sealed abstract class Func extends Product with Serializable {
 
   // TODO: is variable capture an issue, can we assume Barendregt's convention? (see TSfPL notes?)
   def substitute(x: Var, y: Func): Func = this match {
-    case `x` => y
+    // display types are a bit messed up, so we just compare on names
+    // perhaps some sort of type unification?
+    case Var(name, _) if x.name == name => y match {
+      // this doesn't seem to be too useful, type information gets lost too easily
+      case Var(newName, _) => Var(newName, x.displayType)
+      case _ => y
+    }
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
     case _ => this

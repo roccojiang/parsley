@@ -124,14 +124,13 @@ object Transformation {
 
         // TODO: don't just convert this into curried form with a chain of <*>s
         case p: LiftLike =>
-          println(s"HELLO $p")
           val liftedFunc: Parser = Pure(p.func)
           val curriedAp = p.parsers.foldLeft(liftedFunc)(_ <*> _)
-          println(s"CURRIED $curriedAp")
 
+          // TODO
           val pair: (Any, Parser) = (Pure(p.func), p.parsers.head)
           val curried = p.parsers.tail.foldLeft(pair)((_, _))
-          // println(curried)
+
           unfold0(visited, curriedAp)
 
         case Choice(p, q) => unfoldChoice(p, q)

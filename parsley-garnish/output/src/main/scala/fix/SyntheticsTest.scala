@@ -13,8 +13,15 @@ object SyntheticsTest {
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
 
-  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom))(string("a").map(fresh22 => Atom((fresh19: Expr) => Add.curried(fresh19)(fresh22))))
+  // lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(a => Atom(a))) // TODO: converting to Func doesn't work with the lift, so this breaks the shape of the functions as it's just inferred as a Opaque(Add)
+  // lazy val r: Parsley[Expr] = (r, string("a").map(a => Atom(a))).zipped((x, y) => Add(x, y)) | string("b").map(Atom(_))
 
+  // lazy val s: Parsley[Expr] = Wow.lift(s, string("a").map(Atom(_)), string("b").map(Atom(_))) | string("c").map(Atom(_))
+  lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map((fresh6: String) => Atom(fresh6)))(string("a").map(fresh37 => (fresh33: Expr) => (fresh34: Expr) => Wow.curried(fresh34)(Atom(fresh37))(fresh33)) <*> string("b").map((fresh5: String) => Atom(fresh5)))
+
+  // lazy val t: Parsley[Expr] = chain.postfix[Expr](empty)(string("a").map((fresh20 => fresh21 => fresh22 => fresh20(fresh21(fresh22)))((fresh3: String) => Atom(fresh3))((fresh17 => fresh18 => fresh19 => fresh17(fresh19)(fresh18))((fresh8 => fresh9 => fresh10 => fresh8(fresh9(fresh10)))((fresh1: Expr) => (fresh2: Expr) => Add(fresh1)(fresh2))(fresh4 => fresh4)))))
+
+  // lazy val s: Parsley[Expr] = (s, pure(Atom("a")), pure(Atom("b"))).zipped((x, y, z) => Wow(x, y, z))
 
   case class One(a: String)
   case class OneGeneric[A](a: A)
