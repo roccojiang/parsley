@@ -1,2 +1,3 @@
 fix.DebugShowTree
+fix.AmbiguousImplicitConversions
 fix.leftrec.FactorLeftRecursion
