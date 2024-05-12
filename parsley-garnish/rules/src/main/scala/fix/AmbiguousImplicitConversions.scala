@@ -8,10 +8,75 @@ import scala.PartialFunction.cond
 
 class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConversions") {
   override def fix(implicit doc: SyntacticDocument): Patch = {
-    val scopeTree = buildScopeTree(doc.tree)
-    traverseScopeTree(scopeTree)
+    val orderedImports = doc.tree.collect {
+      case i: Import => i
+    }
+
+    // println(orderedImports.map(imp => s"$imp with parent ${imp.parent}"))
+
+    def traverseImports(imports: List[Import]): Patch = {
+      def go(importsToVisit: List[Import], currentImplicits: Seq[ImplicitConversion]): Patch = {
+        importsToVisit match {
+          case head :: tail =>
+            val newScope = head.parent.get
+
+            val implicitsInScope = currentImplicits.filter(i => isInScope(newScope, i.importStat.parent.get)) ++ getImplicitConversions(head)
+            println(s"at $head, found implicits in scope: $implicitsInScope")
+
+            // if we already have clashing implicits in scope, don't report again
+            if (!hasClashingImplicits(currentImplicits) && hasClashingImplicits(implicitsInScope)) {
+              Patch.lint(AmbiguousImplicitConversionsLint(newScope, implicitsInScope)) + go(tail, implicitsInScope)
+            } else {
+              go(tail, implicitsInScope)
+            }
+
+            /*
+            if (isInScope(head, activeScope)) {
+              val newImplicits = currentImplicits ++ getImplicitConversions(head)
+              println(s"\tFound $head in scope, with $newImplicits")
+              if (!hasClashingImplicits(currentImplicits) && hasClashingImplicits(newImplicits)) {
+                Patch.lint(AmbiguousImplicitConversionsLint(newScope, newImplicits)) + go(tail, newScope, newImplicits)
+              } else {
+                go(tail, newScope, newImplicits)
+              }
+            } else {
+              println(s"\t$head is not in scope, with $currentImplicits")
+              go(tail, newScope, getImplicitConversions(head))
+            }
+            */
+          
+          case Nil => Patch.empty
+        }
+      }
+
+      go(imports, Seq.empty)
+    }
+
+  traverseImports(orderedImports)
+
+
+    // val scopeTree = buildScopeTree(doc.tree)
+    // traverseScopeTree(scopeTree)
+
   }
 
+  private def isInScope(tree: Tree, scope: Tree): Boolean = {
+    tree.structure == scope.structure ||
+    tree.parent.map(isInScope(_, scope)).getOrElse(false)
+  }
+
+  private def getImplicitConversions(importStat: Import): Seq[ImplicitConversion] = {
+    importStat.importers.collect {
+      case i: Importer if mayImportLexerImplicit(i) => LexerImplicitSymbol(importStat)
+      case Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), _) => ParsleySyntaxCharacterImplicits(importStat)
+    }
+  }
+
+  private def hasClashingImplicits(implicits: Seq[ImplicitConversion]): Boolean = {
+    implicits.exists(_.isInstanceOf[LexerImplicitSymbol]) && implicits.exists(_.isInstanceOf[ParsleySyntaxCharacterImplicits])
+  }
+
+  /*
   def traverseScopeTree(scopeTree: ScopeTree): Patch = {
     def recurse(currentScope: ScopeTree, implicits: Set[ImplicitConversion]): Patch = {
       currentScope match {
@@ -36,8 +101,9 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
 
     recurse(scopeTree, Set.empty)
   }
+  */
 
-  case class AmbiguousImplicitConversionsLint(tree: Tree, implicits: Set[ImplicitConversion]) extends Diagnostic {
+  case class AmbiguousImplicitConversionsLint(tree: Tree, implicits: Seq[ImplicitConversion]) extends Diagnostic {
     override def position: Position = tree.pos
     override def severity: LintSeverity = LintSeverity.Error
     override def message: String =
