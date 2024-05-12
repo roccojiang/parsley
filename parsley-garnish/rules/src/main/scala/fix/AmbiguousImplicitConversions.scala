@@ -70,10 +70,6 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
 
   object ImportScopeTree {
     def unapply(tree: Stat): Option[Seq[Stat]] = tree match {
-      // global scope
-      case Source(stats) => Some(stats)
-      case Pkg(_, stats) => Some(stats)
-
       // package objects
       case Pkg.Object(_, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
       // objects
@@ -91,6 +87,7 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
     }
   }
 
+  /*
   private def buildScopeTree(tree: Tree): ScopeTree = {
     tree match {
       // find the actual global scope, if nested in the top-level structure
@@ -106,6 +103,54 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
         ImportScope(tree, currentScopeImports, otherStats.map(buildScopeTree(_) + currentScopeImports))
 
       case _ => EmptyScope
+    }
+  }
+  */
+
+  // TODO: switch everything to List so we don't have to .toList in so many places?
+  private def buildScopeTree(topLevelTree: Tree): ScopeTree = {
+    def recurse(trees: List[Stat]): Seq[ScopeTree] = {
+      trees match {
+        case Nil => Seq(EmptyScope)
+
+        case head :: tail =>
+          val (importStats, otherStats) = splitInitialImports(trees)
+
+          if (importStats.nonEmpty) {
+            // standalone import statements - this happens when the imports are in global scope, but not at the top of the file
+            Seq(ImportScope(head, importStats, recurse(otherStats.toList).map(_ + importStats)))
+          } else {
+            head match {
+              case ImportScopeTree(stats) =>
+                val (importStats, otherStats) = splitInitialImports(stats) // imports are read top-down, so we must use span instead of partition
+                ImportScope(head, importStats, recurse(otherStats.toList).map(_ + importStats)) +: recurse(tail)
+
+              case _ => Seq(EmptyScope)
+            }
+          }
+      }
+    }
+
+    topLevelTree match {
+      // find the actual global scope, if nested in the top-level structure
+      case Source(Seq(p: Pkg)) => buildScopeTree(p)
+      case Pkg(_, Seq(p: Pkg)) => buildScopeTree(p)
+
+      // global scope
+      case Source(stats) => 
+        val (importStats, otherStats) = splitInitialImports(stats)
+        ImportScope(topLevelTree, importStats, recurse(otherStats.toList))
+      case Pkg(_, stats) => 
+        val (importStats, otherStats) = splitInitialImports(stats)
+        ImportScope(topLevelTree, importStats, recurse(otherStats.toList))
+
+      case _ => EmptyScope
+    }
+  }
+
+  private def splitInitialImports(stats: Seq[Stat]): (Seq[Import], Seq[Stat]) = {
+    stats.span(_.is[Import]) match {
+      case (importStats, otherStats) => (importStats.collect { case i: Import => i }, otherStats)
     }
   }
 

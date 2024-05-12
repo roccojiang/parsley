@@ -47,8 +47,8 @@ import parsley.syntax.character.stringLift
 object D {  /* assert: AmbiguousImplicitConversions
 ^
 There may be multiple, clashing implicit conversions in this scope:
-* import parsley.syntax.character.stringLift at line 45
 * import lexer.implicits._ at line 55
+* import parsley.syntax.character.stringLift at line 45
 If this is the case, you may encounter confusing errors like 'value/method is not a member of String/Char'.
 To fix this, ensure that you only import a single implicit conversion.
 */
