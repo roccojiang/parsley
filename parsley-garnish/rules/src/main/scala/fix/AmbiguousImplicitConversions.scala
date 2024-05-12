@@ -4,28 +4,12 @@ import scala.meta._
 import scalafix.v1._
 import scalafix.lint.LintSeverity
 
+import scala.PartialFunction.cond
+
 class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConversions") {
   override def fix(implicit doc: SyntacticDocument): Patch = {
-    // val globalImports = collectGlobalImports(doc.tree)
-    // println(s"globalImports: $globalImports")
-
-    // val localImports = collectLocalImports(doc.tree)
-    // println("localImports:")
-    // localImports.foreach(println)
-
-    // val imports = collectImportsPerScope(doc.tree)
-    // imports.foreach(i => println(i + "\n"))
-
-    val scopeTree = collectImports(doc.tree)
+    val scopeTree = buildScopeTree(doc.tree)
     traverseScopeTree(scopeTree)
-  
-    // doc.tree.collect {
-    //   case i @ Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), _) => println(s"parsley.syntax.character import: ${i.structure}")
-
-    //   case i: Importer if mayImportLexerImplicit(i) => println(s"lexer.implicits import: ${i.structure}")
-    // }
-
-    // Patch.empty
   }
 
   def traverseScopeTree(scopeTree: ScopeTree): Patch = {
@@ -37,9 +21,10 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
               case i: Importer if mayImportLexerImplicit(i) => LexerImplicitSymbol(importStat)
               case Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), _) => ParsleySyntaxCharacterImplicits(importStat)
             }
-          }.flatten.toSet ++ implicits
+          }.flatten.toSet // ++ implicits
 
           if (newImplicits.size > 1) {
+            // println(s"Found ambiguous implicits in scope $currentScope: $newImplicits")
             Patch.lint(AmbiguousImplicitConversionsLint(tree, newImplicits))
           } else {
             children.map(recurse(_, newImplicits)).asPatch
@@ -55,13 +40,23 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
   case class AmbiguousImplicitConversionsLint(tree: Tree, implicits: Set[ImplicitConversion]) extends Diagnostic {
     override def position: Position = tree.pos
     override def severity: LintSeverity = LintSeverity.Error
-    override def message: String = s"Conflicting implicit conversions detected in this scope: $implicits"
+    override def message: String =
+      s"""There may be multiple, clashing implicit conversions in this scope:
+         |* ${implicits.mkString("\n* ")}
+         |If this is the case, you may encounter confusing errors like 'value/method is not a member of String/Char'.
+         |To fix this, ensure that you only import a single implicit conversion.
+       """.stripMargin // TODO: is there a canonical link to the wiki page
+      // TODO: add a canonical link to the wiki page? e.g. For more information, see: https://j-mie6.github.io/parsley/5.0/api-guide/syntax.html.
   }
 
-  sealed abstract class ImplicitConversion extends Product with Serializable
+  sealed abstract class ImplicitConversion extends Product with Serializable {
+    def importStat: Import
+
+    override def toString: String = s"${this.importStat} at line ${this.importStat.pos.startLine + 1}"
+  }
   case class LexerImplicitSymbol(importStat: Import) extends ImplicitConversion
   case class ParsleySyntaxCharacterImplicits(importStat: Import) extends ImplicitConversion
-
+  
   
   sealed abstract class ScopeTree extends Product with Serializable {
     def +(imports: Seq[Import]): ScopeTree
@@ -74,7 +69,7 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
   }
 
   object ImportScopeTree {
-    def unapply(tree: Tree): Option[Seq[Stat]] = tree match {
+    def unapply(tree: Stat): Option[Seq[Stat]] = tree match {
       // global scope
       case Source(stats) => Some(stats)
       case Pkg(_, stats) => Some(stats)
@@ -96,38 +91,40 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
     }
   }
 
-  private def collectImports(tree: Tree): ScopeTree = {
+  private def buildScopeTree(tree: Tree): ScopeTree = {
     tree match {
       // find the actual global scope, if nested in the top-level structure
-      case Source(Seq(p: Pkg)) => collectImports(p)
-      case Pkg(_, Seq(p: Pkg)) => collectImports(p)
+      case Source(Seq(p: Pkg)) => buildScopeTree(p)
+      case Pkg(_, Seq(p: Pkg)) => buildScopeTree(p)
 
-      case ImportScopeTree(stats) => ImportScope(tree, extractImports(stats), stats.map(collectImports(_)))
+      // standalone import statement - this happens when the import is in global scope, but not at the top of the file
+      case i: Import => ImportScope(tree, Seq(i), Seq.empty)
+
+      case ImportScopeTree(stats) =>
+        val (importStats, otherStats) = stats.span(_.is[Import]) // imports are read top-down, so we must use span instead of partition
+        val currentScopeImports = importStats.collect { case i: Import => i }
+        ImportScope(tree, currentScopeImports, otherStats.map(buildScopeTree(_) + currentScopeImports))
 
       case _ => EmptyScope
     }
   }
 
-  private def extractImports(stats: Seq[Stat]): Seq[Import] = {
-    stats.filter(_.is[Import]).collect { case i: Import => i }
-  }
-
   private def mayImportLexerImplicit(importer: Importer): Boolean = {
-    def containsAnyTerms(parent: Tree, terms: Term*): Boolean = {
+    def containsAny(parent: Tree, terms: Term*): Boolean = {
       parent.collect {
-        case t: Term if terms.toSeq.exists(term => t.structure == term.structure) => true
+        case t: Term if terms.toSeq.exists(term => t.structure == term.structure) => t
       }.nonEmpty
     }
 
     def containsImportee(importees: List[Importee], importee: Importee): Boolean = {
-      importees.collect {
-        case i: Importee if i.structure == importee.structure => true
-      }.nonEmpty
+      importees.exists(i => cond(i) {
+        case _: Importee if i.structure == importee.structure => true
+      })
     }
 
     containsImportee(importer.importees, Importee.Name(Name.Indeterminate("implicitSymbol"))) || (
-      containsAnyTerms(importer.ref, Term.Name("lexer")) &&
-      containsAnyTerms(importer.ref, Term.Name("implicit"), Term.Name("implicits"))
+      containsAny(importer.ref, Term.Name("lexer")) &&
+      containsAny(importer.ref, Term.Name("implicit"), Term.Name("implicits"))
     )
   }
 }

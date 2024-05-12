@@ -1,7 +1,7 @@
 import scalafix.v1._
 import scala.meta._
 
-import PartialFunction.cond
+import scala.PartialFunction.cond
 
 package object utils {
   def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
