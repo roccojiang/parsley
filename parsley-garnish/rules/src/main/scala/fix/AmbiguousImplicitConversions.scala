@@ -1,107 +1,80 @@
 package fix
 
 import scala.meta._
+import scala.PartialFunction.cond
 import scalafix.v1._
 import scalafix.lint.LintSeverity
 
-import scala.PartialFunction.cond
+import implicits.TreeOps
 
 class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConversions") {
   override def fix(implicit doc: SyntacticDocument): Patch = {
-    val orderedImports = doc.tree.collect {
-      case i: Import => i
-    }
+    val orderedImports = doc.tree.collect { case i: Import => i }
+    traverseImports(orderedImports)
+  }
 
-    // println(orderedImports.map(imp => s"$imp with parent ${imp.parent}"))
+  private def traverseImports(imports: List[Import]): Patch = {
+    @annotation.tailrec
+    def visit(importsToVisit: List[Import], visitedImplicits: Seq[ImplicitConversion], patches: Patch): Patch = {
+      importsToVisit match {
+        // in Scala, import statements can appear anywhere, so we must take extra care here
+        // walk left-to-right through each import statement (i.e. top-down when reading the source file)
+        // this allows us to keep the scope lexically managed: imports are visited in order of appearance
+        // so we correctly track which imports are in scope at any given point in the file
+        case head :: tail =>
+          val currentScope = head.parent.get // this should be fine, Imports should always have a parent
 
-    def traverseImports(imports: List[Import]): Patch = {
-      def go(importsToVisit: List[Import], currentImplicits: Seq[ImplicitConversion]): Patch = {
-        importsToVisit match {
-          case head :: tail =>
-            val newScope = head.parent.get
+          val previousInScope = visitedImplicits.filter(i => currentScope.isWithinScope(i.importStat.parent.get))
+          val currentInScope = previousInScope ++ getImplicitConversions(head)
 
-            val implicitsInScope = currentImplicits.filter(i => isInScope(newScope, i.importStat.parent.get)) ++ getImplicitConversions(head)
-            println(s"at $head, found implicits in scope: $implicitsInScope")
-
-            // if we already have clashing implicits in scope, don't report again
-            if (!hasClashingImplicits(currentImplicits) && hasClashingImplicits(implicitsInScope)) {
-              Patch.lint(AmbiguousImplicitConversionsLint(newScope, implicitsInScope)) + go(tail, implicitsInScope)
-            } else {
-              go(tail, implicitsInScope)
-            }
-
-            /*
-            if (isInScope(head, activeScope)) {
-              val newImplicits = currentImplicits ++ getImplicitConversions(head)
-              println(s"\tFound $head in scope, with $newImplicits")
-              if (!hasClashingImplicits(currentImplicits) && hasClashingImplicits(newImplicits)) {
-                Patch.lint(AmbiguousImplicitConversionsLint(newScope, newImplicits)) + go(tail, newScope, newImplicits)
-              } else {
-                go(tail, newScope, newImplicits)
-              }
-            } else {
-              println(s"\t$head is not in scope, with $currentImplicits")
-              go(tail, newScope, getImplicitConversions(head))
-            }
-            */
-          
-          case Nil => Patch.empty
-        }
+          // if we already had clashing implicits in scope, don't report again
+          if (!hasClashingImplicits(previousInScope) && hasClashingImplicits(currentInScope)) {
+            visit(tail, currentInScope, patches + Patch.lint(AmbiguousImplicitConversionsLint(head, currentInScope)))
+          } else {
+            visit(tail, currentInScope, patches)
+          }
+        
+        case Nil => patches
       }
-
-      go(imports, Seq.empty)
     }
 
-  traverseImports(orderedImports)
-
-
-    // val scopeTree = buildScopeTree(doc.tree)
-    // traverseScopeTree(scopeTree)
-
+    visit(imports, Seq.empty, Patch.empty)
   }
 
-  private def isInScope(tree: Tree, scope: Tree): Boolean = {
-    tree.structure == scope.structure ||
-    tree.parent.map(isInScope(_, scope)).getOrElse(false)
+  sealed abstract class ImplicitConversion extends Product with Serializable {
+    def importStat: Import
+    override def toString: String = s"${this.importStat} at line ${this.importStat.pos.startLine + 1}"
   }
+  case class LexerImplicitSymbol(importStat: Import) extends ImplicitConversion
+  case class ParsleyStringLift(importStat: Import) extends ImplicitConversion
 
   private def getImplicitConversions(importStat: Import): Seq[ImplicitConversion] = {
+    def importsParsleyStringLift(importer: Importer): Boolean = cond(importer) {
+      case Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), importees)
+        if containsImportee(importees, Importee.Name(Name.Indeterminate("stringLift"))) ||
+          containsImportee(importees, Importee.Wildcard()) => true
+    }
+
+    def mayImportLexerImplicit(importer: Importer): Boolean =
+      containsImportee(importer.importees, Importee.Name(Name.Indeterminate("implicitSymbol"))) || (
+        importer.ref.containsAnyOf(Term.Name("lexer")) &&
+        importer.ref.containsAnyOf(Term.Name("implicit"), Term.Name("implicits"))
+      )
+
+    def containsImportee(importees: List[Importee], importee: Importee): Boolean =
+      importees.exists(i => cond(i) {
+        case _: Importee if i.structure == importee.structure => true
+      })
+
     importStat.importers.collect {
       case i: Importer if mayImportLexerImplicit(i) => LexerImplicitSymbol(importStat)
-      case Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), _) => ParsleySyntaxCharacterImplicits(importStat)
+      case i: Importer if importsParsleyStringLift(i) => ParsleyStringLift(importStat)
     }
   }
 
   private def hasClashingImplicits(implicits: Seq[ImplicitConversion]): Boolean = {
-    implicits.exists(_.isInstanceOf[LexerImplicitSymbol]) && implicits.exists(_.isInstanceOf[ParsleySyntaxCharacterImplicits])
+    implicits.exists(_.isInstanceOf[LexerImplicitSymbol]) && implicits.exists(_.isInstanceOf[ParsleyStringLift])
   }
-
-  /*
-  def traverseScopeTree(scopeTree: ScopeTree): Patch = {
-    def recurse(currentScope: ScopeTree, implicits: Set[ImplicitConversion]): Patch = {
-      currentScope match {
-        case ImportScope(tree, imports, children) =>
-          val newImplicits = imports.collect {
-            case importStat @ Import(importers) => importers.collect {
-              case i: Importer if mayImportLexerImplicit(i) => LexerImplicitSymbol(importStat)
-              case Importer(Term.Select(Term.Select(Term.Name("parsley"), Term.Name("syntax")), Term.Name("character")), _) => ParsleySyntaxCharacterImplicits(importStat)
-            }
-          }.flatten.toSet // ++ implicits
-
-          if (newImplicits.size > 1) {
-            // println(s"Found ambiguous implicits in scope $currentScope: $newImplicits")
-            Patch.lint(AmbiguousImplicitConversionsLint(tree, newImplicits))
-          } else {
-            children.map(recurse(_, newImplicits)).asPatch
-          }
-
-        case EmptyScope => Patch.empty
-      }
-    }
-
-    recurse(scopeTree, Set.empty)
-  }
-  */
 
   case class AmbiguousImplicitConversionsLint(tree: Tree, implicits: Seq[ImplicitConversion]) extends Diagnostic {
     override def position: Position = tree.pos
@@ -111,131 +84,20 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
          |* ${implicits.mkString("\n* ")}
          |If this is the case, you may encounter confusing errors like 'value/method is not a member of String/Char'.
          |To fix this, ensure that you only import a single implicit conversion.
-       """.stripMargin // TODO: is there a canonical link to the wiki page
+       """.stripMargin
       // TODO: add a canonical link to the wiki page? e.g. For more information, see: https://j-mie6.github.io/parsley/5.0/api-guide/syntax.html.
   }
+}
 
-  sealed abstract class ImplicitConversion extends Product with Serializable {
-    def importStat: Import
+object implicits {
+  implicit class TreeOps(val tree: Tree) extends AnyVal {
+    def containsAnyOf(terms: Term*): Boolean = tree.collect {
+      case t: Term if terms.toSeq.exists(term => t.structure == term.structure) => t
+    }.nonEmpty
 
-    override def toString: String = s"${this.importStat} at line ${this.importStat.pos.startLine + 1}"
-  }
-  case class LexerImplicitSymbol(importStat: Import) extends ImplicitConversion
-  case class ParsleySyntaxCharacterImplicits(importStat: Import) extends ImplicitConversion
-  
-  
-  sealed abstract class ScopeTree extends Product with Serializable {
-    def +(imports: Seq[Import]): ScopeTree
-  }
-  case class ImportScope(originalTree: Tree, imports: Seq[Import], children: Seq[ScopeTree]) extends ScopeTree {
-    override def +(imports: Seq[Import]): ScopeTree = ImportScope(originalTree, this.imports ++ imports, children)
-  }
-  case object EmptyScope extends ScopeTree {
-    override def +(imports: Seq[Import]): ScopeTree = this
-  }
-
-  object ImportScopeTree {
-    def unapply(tree: Stat): Option[Seq[Stat]] = tree match {
-      // package objects
-      case Pkg.Object(_, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
-      // objects
-      case Defn.Object(_, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
-      // classes
-      case Defn.Class.After_4_6_0(_, _, _, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
-      // traits
-      case Defn.Trait.After_4_6_0(_, _, _, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
-      // enums (scala 3)
-      case Defn.Enum.After_4_6_0(_, _, _, _, Template.After_4_4_0(_, _, _, stats, _)) => Some(stats)
-      // def function objects
-      case Defn.Def.After_4_7_3(_, _, _, _, Term.Block(stats)) => Some(stats)
-
-      case _ => None
+    def isWithinScope(scope: Tree): Boolean = {
+      tree.structure == scope.structure ||
+      tree.parent.map(_.isWithinScope(scope)).getOrElse(false)
     }
-  }
-
-  /*
-  private def buildScopeTree(tree: Tree): ScopeTree = {
-    tree match {
-      // find the actual global scope, if nested in the top-level structure
-      case Source(Seq(p: Pkg)) => buildScopeTree(p)
-      case Pkg(_, Seq(p: Pkg)) => buildScopeTree(p)
-
-      // standalone import statement - this happens when the import is in global scope, but not at the top of the file
-      case i: Import => ImportScope(tree, Seq(i), Seq.empty)
-
-      case ImportScopeTree(stats) =>
-        val (importStats, otherStats) = stats.span(_.is[Import]) // imports are read top-down, so we must use span instead of partition
-        val currentScopeImports = importStats.collect { case i: Import => i }
-        ImportScope(tree, currentScopeImports, otherStats.map(buildScopeTree(_) + currentScopeImports))
-
-      case _ => EmptyScope
-    }
-  }
-  */
-
-  // TODO: switch everything to List so we don't have to .toList in so many places?
-  private def buildScopeTree(topLevelTree: Tree): ScopeTree = {
-    def recurse(trees: List[Stat]): Seq[ScopeTree] = {
-      trees match {
-        case Nil => Seq(EmptyScope)
-
-        case head :: tail =>
-          val (importStats, otherStats) = splitInitialImports(trees)
-
-          if (importStats.nonEmpty) {
-            // standalone import statements - this happens when the imports are in global scope, but not at the top of the file
-            Seq(ImportScope(head, importStats, recurse(otherStats.toList).map(_ + importStats)))
-          } else {
-            head match {
-              case ImportScopeTree(stats) =>
-                val (importStats, otherStats) = splitInitialImports(stats) // imports are read top-down, so we must use span instead of partition
-                ImportScope(head, importStats, recurse(otherStats.toList).map(_ + importStats)) +: recurse(tail)
-
-              case _ => Seq(EmptyScope)
-            }
-          }
-      }
-    }
-
-    topLevelTree match {
-      // find the actual global scope, if nested in the top-level structure
-      case Source(Seq(p: Pkg)) => buildScopeTree(p)
-      case Pkg(_, Seq(p: Pkg)) => buildScopeTree(p)
-
-      // global scope
-      case Source(stats) => 
-        val (importStats, otherStats) = splitInitialImports(stats)
-        ImportScope(topLevelTree, importStats, recurse(otherStats.toList))
-      case Pkg(_, stats) => 
-        val (importStats, otherStats) = splitInitialImports(stats)
-        ImportScope(topLevelTree, importStats, recurse(otherStats.toList))
-
-      case _ => EmptyScope
-    }
-  }
-
-  private def splitInitialImports(stats: Seq[Stat]): (Seq[Import], Seq[Stat]) = {
-    stats.span(_.is[Import]) match {
-      case (importStats, otherStats) => (importStats.collect { case i: Import => i }, otherStats)
-    }
-  }
-
-  private def mayImportLexerImplicit(importer: Importer): Boolean = {
-    def containsAny(parent: Tree, terms: Term*): Boolean = {
-      parent.collect {
-        case t: Term if terms.toSeq.exists(term => t.structure == term.structure) => t
-      }.nonEmpty
-    }
-
-    def containsImportee(importees: List[Importee], importee: Importee): Boolean = {
-      importees.exists(i => cond(i) {
-        case _: Importee if i.structure == importee.structure => true
-      })
-    }
-
-    containsImportee(importer.importees, Importee.Name(Name.Indeterminate("implicitSymbol"))) || (
-      containsAny(importer.ref, Term.Name("lexer")) &&
-      containsAny(importer.ref, Term.Name("implicit"), Term.Name("implicits"))
-    )
   }
 }
