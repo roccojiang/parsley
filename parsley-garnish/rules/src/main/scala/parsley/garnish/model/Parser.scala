@@ -4,7 +4,6 @@ import scala.meta._
 import scalafix.v1._
 
 import Function._
-import parsley.garnish.rules.leftrec.NonTerminalDetection.ParserDefinition
 import parsley.garnish.utils.Matchers
 
 sealed abstract class Parser extends Product with Serializable {

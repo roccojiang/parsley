@@ -2,7 +2,7 @@ package parsley.garnish.rules.leftrec
 
 import scalafix.v1._
 
-import NonTerminalDetection.{getNonTerminals, ParserDefinition}
+import parsley.garnish.analysis.ParserAnalyzer.{getNonTerminalParserDefns, ParserDefinition}
 import Transformation.removeLeftRecursion
 
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
@@ -20,7 +20,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch = {
-    getNonTerminals.map {
+    getNonTerminalParserDefns.map {
       case ParserDefinition(name, _, _, originalTree) =>
         Patch.lint(NonTerminalLint(originalTree.parent.getOrElse(originalTree), name.value))
     }.asPatch
