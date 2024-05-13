@@ -4,31 +4,29 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import NonTerminalDetection.{getNonTerminals, NonTerminalTree}
+import parsley.garnish.analysis.ParserAnalyzer.{getNonTerminalParserDefns, ParserDefinition}
 import parsley.garnish.model.{Function, Parser}
 import parsley.garnish.model.Function._
 import parsley.garnish.model.Parser._
-import parsley.garnish.utils.getParsleyType
+import parsley.garnish.utils.TypeUtils.getParsleyType
 
 object Transformation {
   def removeLeftRecursion(implicit doc: SemanticDocument): Patch = {
-    implicit val env = getNonTerminals
-
-    val nonTerminals = env.map {
-      case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _, _)) =>
-        nonTerminalSymbol -> Parser(bodyTerm)
+    val nonTerminals = getNonTerminalParserDefns.map { parserDefn =>
+      parserDefn.name.symbol -> parserDefn
     }.to(mutable.Map)
 
-    for ((sym, parser) <- nonTerminals) {
+    for (sym <- nonTerminals.keys) {
       val unfolded = unfold(nonTerminals.toMap, sym)
-      val transformedParser = transform(unfolded, env(sym).tpe)
+      val transformedParser = transform(unfolded, nonTerminals(sym).tpe)
       if (transformedParser.isDefined) {
-        nonTerminals(sym) = transformedParser.get
+        nonTerminals(sym) = nonTerminals(sym).copy(parser = transformedParser.get)
       }
     }
 
-    nonTerminals.map {
-      case (nt, transformed) => Patch.replaceTree(env(nt).body, transformed.term.syntax)
+    nonTerminals.values.map {
+      case ParserDefinition(_, transformed, _, originalTree) =>
+          Patch.replaceTree(originalTree, transformed.term.syntax)
     }.asPatch
   }
 
@@ -52,7 +50,7 @@ object Transformation {
     }
   }
 
-  private def unfold(env: Map[Symbol, Parser], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
+  private def unfold(env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedProduction = {
 
     def unfold0(visited: Set[Symbol], nt: Parser): UnfoldedProduction = {
 
@@ -66,7 +64,7 @@ object Transformation {
           UnfoldedProduction(None, NonTerminal(sym), Empty)
         } else {
           println(s"\tvisiting $sym")
-          unfold0(visited + sym, env(sym))
+          unfold0(visited + sym, env(sym).parser)
         }
       }
 
@@ -142,6 +140,6 @@ object Transformation {
       }
     }
 
-    unfold0(Set.empty, env(nonTerminal))
+    unfold0(Set.empty, env(nonTerminal).parser)
   }
 }
