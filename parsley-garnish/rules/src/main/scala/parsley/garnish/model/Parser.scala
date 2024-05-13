@@ -112,11 +112,11 @@ object Parser {
     val term = unrecognisedTerm
   }
 
-  def apply(term: Term)(implicit env: Map[Symbol, ParserDefinition], doc: SemanticDocument): Parser = term match {
+  def apply(term: Term)(implicit doc: SemanticDocument): Parser = term match {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
 
-    case t if env.contains(t.symbol) => NonTerminal(t.symbol)
+    case t: Term.Name => NonTerminal(t.symbol)
 
     // "string(s)"
     case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) =>
