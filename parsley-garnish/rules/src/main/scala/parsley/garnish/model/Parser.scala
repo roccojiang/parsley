@@ -3,7 +3,7 @@ package parsley.garnish.model
 import scala.meta._
 import scalafix.v1._
 
-import Func._
+import Function._
 import parsley.garnish.rules.leftrec.NonTerminalDetection.NonTerminalTree
 import parsley.garnish.utils.Matchers
 
@@ -12,41 +12,29 @@ sealed abstract class Parser extends Product with Serializable {
 
   def term: Term
 
-  def simplify: Parser = this match {
+  def simplify: Parser = transform(this) {
     // p <|> empty == p
-    case Choice(p, Empty) => p.simplify
+    case Choice(p, Empty) => p
     // empty <|> q == q
-    case Choice(Empty, q) => q.simplify
+    case Choice(Empty, q) => q
     // pure(f) <|> u == pure(f)
-    case Choice(Pure(f), _) => Pure(f).simplify
-    case Choice(p, q) => Choice(p.simplify, q.simplify)
+    case Choice(Pure(f), _) => Pure(f)
 
     // empty <*> u == empty
     case Ap(Empty, _) => Empty
     // pure(f) <*> pure(x) == pure(f(x))
-    case Ap(Pure(f), Pure(x)) => Pure(App(f, x)).simplify
+    case Ap(Pure(f), Pure(x)) => Pure(App(f, x))
     // pure(f) <*> x == x.map(f)
-    case Ap(Pure(f), x) => FMap(x, f).simplify
-    case Ap(p, q) => Ap(p.simplify, q.simplify)
+    case Ap(Pure(f), x) => FMap(x, f)
 
     // TODO: prove empty.map(f) == empty
+    // possibly via empty <*> pure x == empty and mf <*> pure x == pure ($ x) <*> mf
+    // or by parametricity
     case FMap(Empty, _) => Empty
     // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
-    case FMap(Pure(x), f) => Pure(App(f, x)).simplify
+    case FMap(Pure(x), f) => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
-    case FMap(FMap(p, f), g) => FMap(p, composeH(g, f)).simplify
-    case FMap(p, f) => FMap(p.simplify, f.simplify)
-
-    // case Many(Empty)      => Empty
-    // case Many(p)          => Many(p.simplify)
-
-    case Postfix(tpe, p, op) => Postfix(tpe, p.simplify, op.simplify)
-
-    // case LiftN(f, ps, isImplicit) => LiftN(f.simplify, ps.map(_.simplify), isImplicit)
-
-    case Pure(f) => Pure(f.simplify)
-
-    case _ => this
+    case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
   }
 
   override def toString: String = term.syntax
@@ -58,7 +46,7 @@ object Parser {
   }
 
   /* x: A, pure(x): Parser[A] */
-  final case class Pure(x: Func) extends Parser {
+  final case class Pure(x: Function) extends Parser {
     val term = q"pure(${x.term})"
   }
 
@@ -80,7 +68,7 @@ object Parser {
   }
 
   /* p: Parser[A], f: Func[A => B], p.map(f): Parser[B] */
-  final case class FMap(p: Parser, f: Func) extends Parser {
+  final case class FMap(p: Parser, f: Function) extends Parser {
     val term = q"${p.term}.map(${f.term})"
   }
 
@@ -101,22 +89,22 @@ object Parser {
 
   /* f: (T1, T2, ..., TN) => R, pN: Parser[TN], f.lift(ps) : Parser[R] */
   sealed trait LiftLike extends Parser {
-    def func: Func
+    def func: Function
     def parsers: List[Parser]
   }
 
-  final case class LiftImplicit(func: Func, parsers: List[Parser]) extends LiftLike {
+  final case class LiftImplicit(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"${func.term}.lift(..${parsers.map(_.term)})"
   }
 
-  final case class LiftExplicit(func: Func, parsers: List[Parser]) extends LiftLike {
+  final case class LiftExplicit(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = {
       val liftN = Term.Name(s"lift${parsers.length}")
       q"$liftN(${func.term}, ..${parsers.map(_.term)})"
     }
   }
 
-  final case class Zipped(func: Func, parsers: List[Parser]) extends LiftLike {
+  final case class Zipped(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
 
@@ -140,7 +128,7 @@ object Parser {
     case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
     // "p.map(f)"
     case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) =>
-      val lambda = Func.buildFuncFromTerm(f, "MAP")
+      val lambda = Function.buildFuncFromTerm(f, "MAP")
       FMap(apply(qual), lambda)
     // "p <|> q" or "p | q"
     case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
@@ -149,7 +137,7 @@ object Parser {
 
     // "liftN(f, p1, ..., pN)"
     case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
-      val lambda = Func.buildFuncFromTerm(f, "LIFT2_EXPLICIT")
+      val lambda = Function.buildFuncFromTerm(f, "LIFT2_EXPLICIT")
       LiftExplicit(lambda, ps.map(apply))
 
     // "f.lift(p1, ..., pN)"
@@ -158,23 +146,38 @@ object Parser {
         case Term.ApplyType.After_4_6_0(g, _) => g
         case _ => f
       }
-      val lambda = Func.buildFuncFromTerm(func, "LIFT2_IMPLICIT")
+      val lambda = Function.buildFuncFromTerm(func, "LIFT2_IMPLICIT")
       LiftImplicit(lambda, ps.map(apply))
 
     // "(p1, ..., pN).zipped(f)"
     case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
-      val lambda = Func.buildFuncFromTerm(f, "ZIPPED")
+      val lambda = Function.buildFuncFromTerm(f, "ZIPPED")
       Zipped(lambda, ps.map(apply))
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 
-  implicit class ParserOps(p: Parser) {
+  private def transform(p: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
+    if (pf.isDefinedAt(p)) {
+      transform(pf(p))(pf) // apply pf, then recurse over the result
+    } else p match {
+      case Choice(p, q) => Choice(transform(p)(pf), transform(q)(pf))
+      case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
+      case FMap(p, f) => FMap(transform(p)(pf), f.simplify)
+      case Many(p) => Many(transform(p)(pf))
+      case Postfix(tpe, p, op) => Postfix(tpe, transform(p)(pf), transform(op)(pf))
+      case LiftImplicit(f, ps) => LiftImplicit(f.simplify, ps.map(transform(_)(pf)))
+      case LiftExplicit(f, ps) => LiftExplicit(f.simplify, ps.map(transform(_)(pf)))
+      case Zipped(f, ps) => Zipped(f.simplify, ps.map(transform(_)(pf)))
+      case Pure(f) => Pure(f.simplify)
+      case _ => p
+    }
+  }
+
+  implicit class ParserOps(private val p: Parser) extends AnyVal {
     def <*>(q: Parser): Parser = Ap(p, q).simplify
-
     def <|>(q: Parser): Parser = Choice(p, q).simplify
-
-    def map(f: Func): Parser = FMap(p, f).simplify
+    def map(f: Function): Parser = FMap(p, f).simplify
   }
 }

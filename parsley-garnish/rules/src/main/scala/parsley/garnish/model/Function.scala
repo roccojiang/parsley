@@ -7,13 +7,13 @@ import parsley.garnish.analysis.MethodParametersAnalyzer
 import parsley.garnish.analysis.MethodParametersAnalyzer.{ConcreteArg, FuncArgument, ParameterArg}
 import parsley.garnish.analysis.TypeSignatureAnalyzer.getInferredTypeSignature
 
-sealed abstract class Func extends Product with Serializable {
-  import Func._
+sealed abstract class Function extends Product with Serializable {
+  import Function._
 
   def term: Term
 
   // TODO: is variable capture an issue, can we assume Barendregt's convention? (see TSfPL notes?)
-  def substitute(x: Var, y: Func): Func = this match {
+  def substitute(x: Var, y: Function): Function = this match {
     // display types are a bit messed up, so we just compare on names
     // perhaps some sort of type unification?
     case Var(name, _) if x.name == name => y match {
@@ -27,9 +27,9 @@ sealed abstract class Func extends Product with Serializable {
   }
 
   // TODO: figure out the correct reduction/normalisation strategy
-  def simplify: Func = if (this.normal) this else this.reduce
+  def simplify: Function = if (this.normal) this else this.reduce
 
-  def reduce: Func = this match {
+  def reduce: Function = this match {
     // Beta reduction rule
     case App(Lam(xs, f), ys @ _*) =>
       // TODO: better error handling than this
@@ -59,14 +59,14 @@ sealed abstract class Func extends Product with Serializable {
   override def toString: String = term.syntax
 }
 
-object Func {
+object Function {
   // TODO: can t be guaranteed to be a Term.Name?
-  case class Opaque(t: Term) extends Func {
+  case class Opaque(t: Term) extends Function {
     val term = t
   }
 
   // TODO: make bound variable generation lazy somehow?
-  case class Var(name: Term.Name = Term.fresh(), displayType: Option[SemanticType] = None) extends Func {
+  case class Var(name: Term.Name = Term.fresh(), displayType: Option[SemanticType] = None) extends Function {
     val term = name
   }
   object Var {
@@ -74,7 +74,7 @@ object Func {
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
-  case class Lam(xs: List[Var], f: Func) extends Func {
+  case class Lam(xs: List[Var], f: Function) extends Function {
     val term = {
       val params = xs.map(x => Term.Param(List.empty, x.term, x.displayType.map(t => Type.Name(t.toString)), None))
       q"(..$params) => ${f.term}"
@@ -82,22 +82,22 @@ object Func {
   }
   object Lam {
     /* x: T, f: R, \x.f : T => R */
-    def apply(x: Var, f: Func): Func = Lam(List(x), f)
+    def apply(x: Var, f: Function): Function = Lam(List(x), f)
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
-  case class App(f: Func, xs: Func*) extends Func {
+  case class App(f: Function, xs: Function*) extends Function {
     val term = q"${f.term}(..${xs.toList.map(_.term)})"
   }
 
   /* id : A => A */
-  def id: Func = {
+  def id: Function = {
     val x = Var() // : A
     Lam(x, x)
   }
 
   /* flip : (A => B => C) => B => A => C */
-  def flip: Func = {
+  def flip: Function = {
     val f = Var() // : A => B => C
     val x = Var() // : B
     val y = Var() // : A
@@ -106,7 +106,7 @@ object Func {
   }
 
   /* compose : (B => C) => (A => B) => A => C */
-  def compose: Func = {
+  def compose: Function = {
     val f = Var() // : B => C
     val g = Var() // : A => B
     val x = Var() // : A
@@ -114,17 +114,17 @@ object Func {
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
 
-  def composeH(f: Func /* B => C */): Func /* (A => B) => A => C) */ = App(compose, f)
-  def composeH(f: Func /* B => C */, g: Func /* A => B */): Func /* A => C */ = App(App(compose, f), g)
+  def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
+  def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
 
-  private def toFunc(f: Opaque, args: List[List[FuncArgument]]): Func = {
+  private def toFunc(f: Opaque, args: List[List[FuncArgument]]): Function = {
     // alpha conversion: assign fresh variable names
     val freshArgs = args.map(_.map {
       case ParameterArg(_, tpe) => ParameterArg(Term.fresh(), tpe)
       case arg => arg
     })
 
-    val apps = freshArgs.foldLeft(f: Func) { (acc, args) => {
+    val apps = freshArgs.foldLeft(f: Function) { (acc, args) => {
       val params = args.map {
         case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
         case ConcreteArg(arg, _)     => Opaque(arg)
@@ -140,7 +140,7 @@ object Func {
     }}
   }
 
-  def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Func = {
+  def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
     def buildFunc(g: Term.Name) = {
       println(s"${g.structure} func within $debugName: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
       val typeSignature = getInferredTypeSignature(g)
@@ -150,12 +150,12 @@ object Func {
 
       val curriedArgs = funcArgsWithTypes.flatten.map(List(_))
 
-      val lambdaTerm = Func.toFunc(Opaque(g), curriedArgs)
+      val lambdaTerm = Function.toFunc(Opaque(g), curriedArgs)
       println(s">> LAMBDATERM: $lambdaTerm")
       lambdaTerm
     }
 
-    def tryBuildFunc(f: Term): Option[Func] = {
+    def tryBuildFunc(f: Term): Option[Function] = {
       println(s"$debugName: ${f.structure}; sig = ${f.symbol.info.map(_.signature.structure)}")
 
       f.collect {

@@ -4,7 +4,7 @@ import scala.meta._
 import scalafix.v1._
 
 object implicits {
-  implicit class TreeOps(val tree: Tree) extends AnyVal {
+  implicit class TreeOps(private val tree: Tree) extends AnyVal {
     def containsAnyOf(terms: Term*): Boolean = tree.collect {
       case t: Term if terms.toSeq.exists(term => t.structure == term.structure) => t
     }.nonEmpty

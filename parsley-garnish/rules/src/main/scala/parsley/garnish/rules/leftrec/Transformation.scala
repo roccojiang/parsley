@@ -5,8 +5,8 @@ import scala.meta._
 import scalafix.v1._
 
 import NonTerminalDetection.{getNonTerminals, NonTerminalTree}
-import parsley.garnish.model.{Func, Parser}
-import parsley.garnish.model.Func._
+import parsley.garnish.model.{Function, Parser}
+import parsley.garnish.model.Function._
 import parsley.garnish.model.Parser._
 import parsley.garnish.utils.getParsleyType
 
@@ -32,7 +32,7 @@ object Transformation {
     }.asPatch
   }
 
-  private case class UnfoldedProduction(empty: Option[Func], nonLeftRec: Parser, leftRec: Parser)
+  private case class UnfoldedProduction(empty: Option[Function], nonLeftRec: Parser, leftRec: Parser)
 
   /* Returns a parser transformed into postfix form if it is left-recursive, otherwise returns None. */
   private def transform(unfolded: UnfoldedProduction, tpe: Type.Name): Option[Parser] = {
