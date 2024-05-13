@@ -131,6 +131,12 @@ lazy val parsleyGarnishSettings = commonSettings ++ Seq(
   scalacOptions ++= Seq("-P:semanticdb:synthetics:on"),
 )
 
+lazy val parsleyGarnishTestSettings = parsleyGarnishSettings ++ Seq(
+  // Some of the integration tests contain unused code on purpose, so these warnings can be silenced
+  scalacOptions -= "-Wunused",
+  scalacOptions += "-Wconf:cat=other-pure-statement:s,cat=w-flag-dead-code:s",
+)
+
 lazy val parsleyGarnish = project
   .in(file("parsley-garnish"))
   .settings(
@@ -148,9 +154,6 @@ lazy val garnishRules = project
     parsleyGarnishSettings,
 
     libraryDependencies += "ch.epfl.scala" %% "scalafix-core" % _root_.scalafix.sbt.BuildInfo.scalafixVersion,
-
-    // TODO: remove this, it's only here for debugging purposes
-    libraryDependencies += "com.lihaoyi" %% "pprint" % "0.9.0",
   )
 
 lazy val garnishInput = project
@@ -158,7 +161,7 @@ lazy val garnishInput = project
   .dependsOn(parsley.jvm)
   .settings(
     publish / skip := true,
-    parsleyGarnishSettings,
+    parsleyGarnishTestSettings,
   )
 
 lazy val garnishOutput = project
@@ -166,7 +169,7 @@ lazy val garnishOutput = project
   .dependsOn(parsley.jvm)
   .settings(
     publish / skip := true,
-    parsleyGarnishSettings,
+    parsleyGarnishTestSettings,
   )
 
 lazy val garnishTests = project
