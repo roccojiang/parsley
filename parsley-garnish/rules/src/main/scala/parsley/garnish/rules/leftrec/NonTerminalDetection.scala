@@ -7,16 +7,16 @@ import parsley.garnish.utils.{getParsleyType, isParsleyType}
 
 object NonTerminalDetection {
 
-  case class NonTerminalTree(name: Term.Name, body: Term, tpe: Type.Name, originalTree: Defn)
+  case class ParserDefinition(name: Term.Name, body: Term, tpe: Type.Name, originalTree: Defn)
 
-  def getNonTerminals(implicit doc: SemanticDocument): Map[Symbol, NonTerminalTree] = {
+  def getNonTerminals(implicit doc: SemanticDocument): Map[Symbol, ParserDefinition] = {
     def collectVars(vars: List[Pat], body: Term, originalTree: Defn) = {
       vars.collect {
         case Pat.Var(varName) if isParsleyType(varName.symbol) =>
           val tpe = getParsleyType(varName.symbol)
           assert(tpe.isDefined, s"expected a Parsley type for $varName, got ${varName.symbol.info.get.signature}")
 
-          varName.symbol -> NonTerminalTree(varName, body, tpe.get, originalTree)
+          varName.symbol -> ParserDefinition(varName, body, tpe.get, originalTree)
       }
     }
 

@@ -4,7 +4,7 @@ import scala.meta._
 import scalafix.v1._
 
 import Function._
-import parsley.garnish.rules.leftrec.NonTerminalDetection.NonTerminalTree
+import parsley.garnish.rules.leftrec.NonTerminalDetection.ParserDefinition
 import parsley.garnish.utils.Matchers
 
 sealed abstract class Parser extends Product with Serializable {
@@ -112,7 +112,7 @@ object Parser {
     val term = unrecognisedTerm
   }
 
-  def apply(term: Term)(implicit env: Map[Symbol, NonTerminalTree], doc: SemanticDocument): Parser = term match {
+  def apply(term: Term)(implicit env: Map[Symbol, ParserDefinition], doc: SemanticDocument): Parser = term match {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
 

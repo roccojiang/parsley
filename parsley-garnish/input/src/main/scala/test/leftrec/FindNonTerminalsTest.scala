@@ -20,7 +20,10 @@ object FindNonTerminalsTest {
 
   val p: Parsley[String] = string("Thyme") // assert: FactorLeftRecursion
   var q = string("Rosemary") // assert: FactorLeftRecursion
-  lazy val r: Parsley[Unit] = empty.void // assert: FactorLeftRecursion
+  lazy val r: Parsley[Unit] = empty.void /* assert: FactorLeftRecursion
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+r was detected to be a non-terminal.
+*/
 
   def add(a: String)(b: String) = a + b
   val s = p.map(add) <*> string("Sage") // assert: FactorLeftRecursion

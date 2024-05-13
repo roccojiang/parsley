@@ -4,7 +4,7 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import NonTerminalDetection.{getNonTerminals, NonTerminalTree}
+import NonTerminalDetection.{getNonTerminals, ParserDefinition}
 import parsley.garnish.model.{Function, Parser}
 import parsley.garnish.model.Function._
 import parsley.garnish.model.Parser._
@@ -15,7 +15,7 @@ object Transformation {
     implicit val env = getNonTerminals
 
     val nonTerminals = env.map {
-      case (nonTerminalSymbol, NonTerminalTree(_, bodyTerm, _, _)) =>
+      case (nonTerminalSymbol, ParserDefinition(_, bodyTerm, _, _)) =>
         nonTerminalSymbol -> Parser(bodyTerm)
     }.to(mutable.Map)
 
