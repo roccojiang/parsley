@@ -5,6 +5,8 @@ import scalafix.v1._
 import parsley.garnish.analysis.ParserAnalyzer.{getNonTerminalParserDefns, ParserDefinition}
 import Transformation.removeLeftRecursion
 
+import parsley.garnish.utils.recursivelyPrintSynthetics
+
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
   def this() = this(FactorLeftRecursionConfig.default)
 
@@ -15,6 +17,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   override def fix(implicit doc: SemanticDocument): Patch = {
+    recursivelyPrintSynthetics(doc.tree)
     val leftRecFactoringPatches = removeLeftRecursion
     leftRecFactoringPatches + (if (config.reportNonTerminalLocations) lintNonTerminalLocations else Patch.empty)
   }

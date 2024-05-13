@@ -1,10 +1,10 @@
 package parsley.garnish.analysis
 
-import parsley.garnish.model.Parser
-import parsley.garnish.utils.TypeUtils._
+import scala.meta._
 import scalafix.v1._
 
-import scala.meta._
+import parsley.garnish.model.Parser
+import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 
 object ParserAnalyzer {
 
