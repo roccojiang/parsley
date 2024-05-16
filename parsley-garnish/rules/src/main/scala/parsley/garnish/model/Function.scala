@@ -16,11 +16,7 @@ sealed abstract class Function extends Product with Serializable {
   def substitute(x: Var, y: Function): Function = this match {
     // display types are a bit messed up, so we just compare on names
     // perhaps some sort of type unification?
-    case Var(name, _) if x.name == name => y match {
-      // this doesn't seem to be too useful, type information gets lost too easily
-      case Var(newName, _) => Var(newName, x.displayType)
-      case _ => y
-    }
+    case Var(name, _) if x.name == name => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
     case _ => this
@@ -142,7 +138,13 @@ object Function {
 
   def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
     def buildFunc(g: Term.Name) = {
-      println(s"${g.structure} func within $debugName: ${g.synthetics} | ${g.synthetics.structure} )}") // TODO: this seems to find the correct Term.Names
+      // println(s"${g.structure} func within $debugName:
+      //   ${g.synthetics} | ${g.synthetics.structure} )}")" +
+      
+      println(s"""${g.structure} func within $debugName:
+                 |\tsynthetics = ${g.synthetics} | ${g.synthetics.structure}
+                 |\tsymbol = ${g.symbol} | ${g.symbol.info.map(_.signature.structure)}
+                 """.stripMargin)
       val typeSignature = getInferredTypeSignature(g)
       println(s">> typeSignature: $typeSignature")
       val funcArgs = MethodParametersAnalyzer.getFuncArguments(f)

@@ -1,5 +1,6 @@
 package parsley.garnish.model
 
+import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
@@ -36,7 +37,7 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
   }
 
-  override def toString: String = term.syntax
+  // override def toString: String = term.syntax
 }
 
 object Parser {
@@ -106,6 +107,9 @@ object Parser {
   final case class Zipped(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
+  final case class Bridge(func: Function, parsers: List[Parser]) extends LiftLike {
+    val term = q"${func.term}(..${parsers.map(_.term)})"
+  }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
@@ -114,8 +118,6 @@ object Parser {
   def apply(term: Term)(implicit doc: SemanticDocument): Parser = term match {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
-
-    case t: Term.Name => NonTerminal(t.symbol)
 
     // "string(s)"
     case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) =>
@@ -152,6 +154,17 @@ object Parser {
     case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
       val lambda = Function.buildFuncFromTerm(f, "ZIPPED")
       Zipped(lambda, ps.map(apply))
+    
+    // "BridgeCons(p1, ..., pN)"
+    case Term.Apply.After_4_6_0(fun, ps) if fun.synthetics.exists(cond(_) {
+        case SelectTree(_, IdTree(symInfo)) => Matchers.bridgeApply.matches(symInfo.symbol)
+    }) =>
+      val lambda = Function.buildFuncFromTerm(fun, "BRIDGE")
+      Bridge(lambda, ps.map(apply)) // TODO: I haven't unpacked the ArgClause here and directly mapped, does this work?
+
+    // any other unrecognised term names will be assumed to be a non-terminal
+    // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
+    case t: Term.Name => NonTerminal(t.symbol)
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)

@@ -1,2 +1,3 @@
 parsley.garnish.rules.AmbiguousImplicitConversions
+parsley.garnish.rules.SimplifyComplexParsers
 parsley.garnish.rules.leftrec.FactorLeftRecursion

@@ -33,8 +33,11 @@ object TypeSignatureAnalyzer {
   }
 
   def getInferredTypeSignature(term: Term.Name)(implicit doc: SemanticDocument): TypeSignature = {
-    val synthetics = term.synthetics
-    val typeList = synthetics collect {
+    val signatureTypeList = {
+      val signatureShape = term.symbol.info.map(extractParamListsTypes)
+    }
+
+    val syntheticsTypeList = term.synthetics collect {
       // TODO: cases other than SelectTree - need to make this work for more than just .apply methods
       // same as below case but wrapped in an ApplyTree for some reason - seems to happen with XXX.lift(x, y, z) implicit lift syntax?
       case ApplyTree(TypeApplyTree(SelectTree(_, IdTree(info)), typeArgs), _) =>
@@ -54,9 +57,11 @@ object TypeSignatureAnalyzer {
         val signatureShape = term.symbol.info.map(extractParamListsTypes)
         substituteTypes(signatureShape.get, concreteTypeArgs) // TODO: handle optional properly
     }
+    assert(syntheticsTypeList.length <= 1, s"expected at most one inferred type signature from synthetics, got $syntheticsTypeList")
 
-    assert(typeList.length <= 1, s"expected at most one inferred type signature, got $typeList")
-    typeList.headOption.getOrElse(List.empty)
+    // signatureTypeList.getOrElse(syntheticsTypeList.headOption.getOrElse(List.empty))
+
+    syntheticsTypeList.headOption.getOrElse(List.empty)
   }
 
   def substituteTypes(typeSignature: List[List[MethodParamType]], concreteTypes: List[ConcreteType]): TypeSignature = {

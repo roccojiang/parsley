@@ -14,6 +14,9 @@ object Matchers {
   val zipped = SymbolMatcher.normalized(
     (2 to 22).map(i => s"parsley.syntax.zipped.Zipped$i#zipped"): _*
   )
+  val bridgeApply = SymbolMatcher.normalized(
+    (1 to 22).map(i => s"parsley.generic.ParserBridge$i#apply"): _*
+  )
 
   val string = SymbolMatcher.normalized("parsley.character.string")
   val digit = SymbolMatcher.normalized("parsley.character.digit")
