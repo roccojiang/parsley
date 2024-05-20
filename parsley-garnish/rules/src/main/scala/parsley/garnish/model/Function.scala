@@ -1,5 +1,6 @@
 package parsley.garnish.model
 
+import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
@@ -19,11 +20,16 @@ sealed abstract class Function extends Product with Serializable {
     case Var(name, _) if x.name == name => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
+    case Opaque(t) =>
+      Opaque(t.transform {
+        case name: Term.Name if x.name.structure == name.structure => y.term
+      }.asInstanceOf[Term])
     case _ => this
   }
 
   // TODO: figure out the correct reduction/normalisation strategy
-  def simplify: Function = if (this.normal) this else this.reduce
+  def simplify: Function =
+    if (this.normal) this else this.reduce
 
   def reduce: Function = this match {
     // Beta reduction rule
@@ -52,7 +58,13 @@ sealed abstract class Function extends Product with Serializable {
     case _ => true
   }
 
-  override def toString: String = term.syntax
+  // override def toString: String = term.syntax
+  override def toString: String = this match {
+    case Opaque(t) => s"${Console.RED}${t.syntax}${Console.RESET}"
+    case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
+    case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
+    case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
+  }
 }
 
 object Function {
@@ -62,17 +74,17 @@ object Function {
   }
 
   // TODO: make bound variable generation lazy somehow?
-  case class Var(name: Term.Name = Term.fresh(), displayType: Option[SemanticType] = None) extends Function {
-    val term = name
+  case class Var(name: Term.Name = Term.fresh(), displayType: Option[Type] = None) extends Function {
+    val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
   }
   object Var {
-    def apply(displayType: SemanticType): Var = Var(Term.fresh(), Some(displayType))
+    def apply(displayType: Type): Var = Var(Term.fresh(), Some(displayType))
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
   case class Lam(xs: List[Var], f: Function) extends Function {
     val term = {
-      val params = xs.map(x => Term.Param(List.empty, x.term, x.displayType.map(t => Type.Name(t.toString)), None))
+      val params = xs.map(x => Term.Param(List.empty, x.name, x.displayType, None))
       q"(..$params) => ${f.term}"
     }
   }
@@ -98,6 +110,7 @@ object Function {
     val x = Var() // : B
     val y = Var() // : A
 
+    // \f -> \x -> \y -> f y x
     Lam(f, Lam(x, Lam(y, App(App(f, y), x))))
   }
 
@@ -107,12 +120,14 @@ object Function {
     val g = Var() // : A => B
     val x = Var() // : A
 
+    // \f -> \g -> \x -> f (g x)
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
 
   def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
 
+  /*
   private def toFunc(f: Opaque, args: List[List[FuncArgument]]): Function = {
     // alpha conversion: assign fresh variable names
     val freshArgs = args.map(_.map {
@@ -135,44 +150,108 @@ object Function {
       if (params.isEmpty) acc else Lam(params, acc)
     }}
   }
+  */
 
+  type ParameterLists = List[List[Term.Param]]
+
+  private def splitFunction(func: Term.Function): (ParameterLists, Term) = {
+    @annotation.tailrec
+    def recurse(t: Term, acc: ParameterLists): (ParameterLists, Term) = t match {
+      case Term.Function.After_4_6_0(params, body) => recurse(body, params.values :: acc)
+      case _ => (acc, t)
+    }
+
+    val (reversedParamLists, body) = recurse(func, List.empty)
+    (reversedParamLists.reverse, body)
+  }
+
+  // This should be an in-order traversal?
+  private def convertAnonymousFunction(func: Term.AnonymousFunction): (Term, List[Var]) = {
+    val namedParams = mutable.ListBuffer.empty[Var]
+    val transformedFunc = func.transform {
+      case Term.Ascribe(Term.Placeholder(), tpe) =>
+        val freshParam = Term.fresh("placeholder")
+        namedParams += Var(freshParam, Some(tpe))
+        freshParam
+      case _: Term.Placeholder =>
+        val freshParam = Term.fresh("placeholder")
+        namedParams += Var(freshParam, None)
+        freshParam
+    }
+
+    (transformedFunc.asInstanceOf[Term], namedParams.toList)
+  }
+
+  def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
+    parsley.garnish.utils.printInfo(f, debugName)
+
+    val func = f match {
+      // * Lambda - look at parameter lists
+      case func: Term.Function =>
+        val (params, body) = splitFunction(func)
+        // TODO: REMEMBER TO DO THIS!!!
+        // TODO: rename params, or whatever approach to fix name clashing
+        params.foldRight[Function](Opaque(body)) { (params, acc) =>
+          Lam(params.map(p => Var(Term.Name(p.name.toString))), acc)
+        }
+      // * Lambda with placeholder syntax (similar as above)
+      case func: Term.AnonymousFunction =>
+        // TODO: bundle the placeholderMap into the Function datatype
+        val (convertedFunc, params) = convertAnonymousFunction(func)
+        params.foldRight[Function](Opaque(convertedFunc)) { (param, acc) =>
+          Lam(List(param), acc)
+        }
+      // * Otherwise - just treat as opaque
+      // This should be fine? We'll just do function application like func(arg1)(arg2) without being able to substitute
+      case _ => Opaque(f)
+    }
+
+    println(s"\t RESULTFUNC: $func")
+    func
+  }
+
+  /*
   def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
     def buildFunc(g: Term.Name) = {
       // println(s"${g.structure} func within $debugName:
       //   ${g.synthetics} | ${g.synthetics.structure} )}")" +
       
+      /*
       println(s"""${g.structure} func within $debugName:
                  |\tsynthetics = ${g.synthetics} | ${g.synthetics.structure}
                  |\tsymbol = ${g.symbol} | ${g.symbol.info.map(_.signature.structure)}
                  """.stripMargin)
+                 */
       val typeSignature = getInferredTypeSignature(g)
-      println(s">> typeSignature: $typeSignature")
+      // println(s">> typeSignature: $typeSignature")
       val funcArgs = MethodParametersAnalyzer.getFuncArguments(f)
       val funcArgsWithTypes = MethodParametersAnalyzer.updateFuncArgTypes(funcArgs, typeSignature)
 
       val curriedArgs = funcArgsWithTypes.flatten.map(List(_))
 
       val lambdaTerm = Function.toFunc(Opaque(g), curriedArgs)
-      println(s">> LAMBDATERM: $lambdaTerm")
+      // println(s">> LAMBDATERM: $lambdaTerm")
       lambdaTerm
     }
 
     def tryBuildFunc(f: Term): Option[Function] = {
-      println(s"$debugName: ${f.structure}; sig = ${f.symbol.info.map(_.signature.structure)}")
+      parsley.garnish.utils.printInfo(f, debugName)
+
 
       f.collect {
         case Term.Apply.After_4_6_0(g: Term.Name, _) =>
           // println(s"$g symbol sig ${g.symbol.info.map(i => i.signature.structure)}") // this gets a class signature, it seems
-          println(">> Term.Apply(Term.Name) case")
           buildFunc(g)
       }.headOption.orElse(f match {
         case f: Term.Name =>
-          println(">> Just Term.Name case")
           Some(buildFunc(f))
         case _ => None
       })
+
+      // newApproach
     }
 
     tryBuildFunc(f).getOrElse(Opaque(f))
   }
+  */
 }

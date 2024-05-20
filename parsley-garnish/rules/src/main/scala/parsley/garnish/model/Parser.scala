@@ -27,9 +27,7 @@ sealed abstract class Parser extends Product with Serializable {
     // pure(f) <*> x == x.map(f)
     case Ap(Pure(f), x) => FMap(x, f)
 
-    // TODO: prove empty.map(f) == empty
-    // possibly via empty <*> pure x == empty and mf <*> pure x == pure ($ x) <*> mf
-    // or by parametricity
+    // empty.map(f) == empty  [proof in report appendix]
     case FMap(Empty, _) => Empty
     // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
     case FMap(Pure(x), f) => Pure(App(f, x))

@@ -15,8 +15,6 @@ object MethodParametersAnalyzer {
   private[analysis] def extractParamLists(f: Term): List[List[Term.Name]] = f match {
     case Term.Function.After_4_6_0(params, body) =>
       params.values.collect { case Term.Param(_, name: Term.Name, _, _) => name } :: extractParamLists(body)
-    // case Term.AnonymousFunction(body)
-    // TODO: partial functions? anonymous functions will probably be converted to a proper function by the time we get here
     case _ => List.empty
   }
 
@@ -52,6 +50,7 @@ object MethodParametersAnalyzer {
     * and they will be returned without having their types updated.
    */
   def updateFuncArgTypes(argsLists: List[List[FuncArgument]], typeSignature: TypeSignature): List[List[FuncArgument]] = {
+    println(s">> argsLists: $argsLists")
     if (argsLists.length != typeSignature.length) argsLists
     else {
       argsLists.zip(typeSignature).map { case (args, types) =>
