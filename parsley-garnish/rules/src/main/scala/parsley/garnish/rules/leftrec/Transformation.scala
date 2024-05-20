@@ -113,7 +113,8 @@ object Transformation {
       }
 
       nt match {
-        case NonTerminal(sym) => unfoldNonTerminal(sym)
+        // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
+        case NonTerminal(sym) if env contains sym => unfoldNonTerminal(sym)
 
         case p@Str(_) => UnfoldedProduction(None, p, Empty)
         case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
@@ -121,14 +122,12 @@ object Transformation {
 
         case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
 
-        // TODO: don't just convert this into curried form with a chain of <*>s
         case p: LiftLike =>
-          val liftedFunc: Parser = Pure(p.func)
+          val liftedFunc: Parser = Pure(p.func match {
+            case Opaque(f @ Term.Name(_)) if p.parsers.size > 1 => Opaque(q"$f.curried")
+            case _ => p.func
+          })
           val curriedAp = p.parsers.foldLeft(liftedFunc)(_ <*> _)
-
-          // TODO
-          val pair: (Any, Parser) = (Pure(p.func), p.parsers.head)
-          val curried = p.parsers.tail.foldLeft(pair)((_, _))
 
           unfold0(visited, curriedAp)
 

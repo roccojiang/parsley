@@ -34,17 +34,14 @@ sealed abstract class Function extends Product with Serializable {
   def simplify: Function =
     if (this.normal) this else this.reduce
 
-  def reduce: Function = this match {
+  def reduce: Function = {
+    println(s"SIMPLIFYING: $this")
+    this match {
     // Beta reduction rule
     case App(Lam(xs, f), ys @ _*) =>
       // TODO: better error handling than this
       assert(xs.length == ys.length, "Incorrect number of arguments")
-
-      val reduced = xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
-      // println(s"SIMPLIFYING: $this")
-      // println(s"REDUCED: $reduced")
-
-      reduced
+      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
 
     case App(f, xs @ _*) => f.reduce match {
       case g: Lam => App(g, xs.map(_.reduce): _*).reduce
@@ -53,7 +50,7 @@ sealed abstract class Function extends Product with Serializable {
     case Lam(xs, f) => Lam(xs, f.reduce)
 
     case _ => this
-  }
+  }}
 
   private def normal: Boolean = this match {
     case App(Lam(_, _), _*) => false
@@ -94,7 +91,7 @@ object Function {
         case Opaque(t) if params.size == 1 =>
           t.transform {
             case v: Term.Name if v.isEqual(xs.head.name) => Term.Placeholder()
-          }.asInstanceOf[Term]
+        }.asInstanceOf[Term]
         
         case _ => q"(..$params) => ${f.term}"
       }

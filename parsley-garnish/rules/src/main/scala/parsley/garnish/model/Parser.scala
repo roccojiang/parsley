@@ -35,7 +35,7 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
   }
 
-  // override def toString: String = term.syntax
+  override def toString: String = term.syntax
 }
 
 object Parser {
@@ -180,14 +180,15 @@ object Parser {
       case LiftImplicit(f, ps) => LiftImplicit(f.simplify, ps.map(transform(_)(pf)))
       case LiftExplicit(f, ps) => LiftExplicit(f.simplify, ps.map(transform(_)(pf)))
       case Zipped(f, ps) => Zipped(f.simplify, ps.map(transform(_)(pf)))
+      case Bridge(f, ps) => Bridge(f.simplify, ps.map(transform(_)(pf)))
       case Pure(f) => Pure(f.simplify)
       case _ => p
     }
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
-    def <*>(q: Parser): Parser = Ap(p, q).simplify
-    def <|>(q: Parser): Parser = Choice(p, q).simplify
-    def map(f: Function): Parser = FMap(p, f).simplify
+    def <*>(q: Parser): Parser = Ap(p, q) //.simplify
+    def <|>(q: Parser): Parser = Choice(p, q) //.simplify
+    def map(f: Function): Parser = FMap(p, f) //.simplify
   }
 }
