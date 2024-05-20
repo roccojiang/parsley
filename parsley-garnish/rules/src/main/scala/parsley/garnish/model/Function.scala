@@ -2,6 +2,7 @@ package parsley.garnish.model
 
 import scala.collection.mutable
 import scala.meta._
+import scala.meta.contrib._
 import scalafix.v1._
 
 import parsley.garnish.analysis.MethodParametersAnalyzer
@@ -13,16 +14,18 @@ sealed abstract class Function extends Product with Serializable {
 
   def term: Term
 
-  // TODO: is variable capture an issue, can we assume Barendregt's convention? (see TSfPL notes?)
+  // Barendregt's convention is enforced
   def substitute(x: Var, y: Function): Function = this match {
-    // display types are a bit messed up, so we just compare on names
-    // perhaps some sort of type unification?
-    case Var(name, _) if x.name == name => y
+    case Var(name, _) if name.isEqual(x.name) => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
     case Opaque(t) =>
       Opaque(t.transform {
-        case name: Term.Name if x.name.structure == name.structure => y.term
+        case name: Term.Name =>
+          // Must compare structurally, still cannot use referential equality in this case
+          // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
+          if (name.isEqual(x.name)) y.term
+          else name
       }.asInstanceOf[Term])
     case _ => this
   }
@@ -38,8 +41,8 @@ sealed abstract class Function extends Product with Serializable {
       assert(xs.length == ys.length, "Incorrect number of arguments")
 
       val reduced = xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
-      println(s"SIMPLIFYING: $this")
-      println(s"REDUCED: $reduced")
+      // println(s"SIMPLIFYING: $this")
+      // println(s"REDUCED: $reduced")
 
       reduced
 
@@ -68,17 +71,17 @@ sealed abstract class Function extends Product with Serializable {
 }
 
 object Function {
-  // TODO: can t be guaranteed to be a Term.Name?
   case class Opaque(t: Term) extends Function {
     val term = t
   }
 
-  // TODO: make bound variable generation lazy somehow?
-  case class Var(name: Term.Name = Term.fresh(), displayType: Option[Type] = None) extends Function {
+  case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
+    // Enforce Barendregt's convention
+    val name = Term.fresh(prefix.getOrElse("fresh"))
     val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
   }
   object Var {
-    def apply(displayType: Type): Var = Var(Term.fresh(), Some(displayType))
+    def unapply(v: Var): Option[(Term.Name, Option[Type])] = Some((v.name, v.displayType))
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
@@ -152,34 +155,49 @@ object Function {
   }
   */
 
-  type ParameterLists = List[List[Term.Param]]
+  private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Function = {
+    type ParameterLists = List[List[Term.Param]]
 
-  private def splitFunction(func: Term.Function): (ParameterLists, Term) = {
     @annotation.tailrec
-    def recurse(t: Term, acc: ParameterLists): (ParameterLists, Term) = t match {
-      case Term.Function.After_4_6_0(params, body) => recurse(body, params.values :: acc)
+    def recurseParamLists(t: Term, acc: ParameterLists): (ParameterLists, Term) = t match {
+      case Term.Function.After_4_6_0(params, body) => recurseParamLists(body, params.values :: acc)
       case _ => (acc, t)
     }
 
-    val (reversedParamLists, body) = recurse(func, List.empty)
-    (reversedParamLists.reverse, body)
+    val (reversedParamLists, body) = recurseParamLists(func, List.empty)
+
+    // Replace each method parameter with a fresh variable to preserve Barendregt's convention
+    val freshReplacements = reversedParamLists.reverse.map(_.collect {
+      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var(Some("lambda_param"), decltpe)
+    })
+    val freshParams = freshReplacements.map(_.map(_._2))
+    val symbolsMap = freshReplacements.flatten.toMap
+
+    // Substitute the fresh variables into the function body
+    // Comparison using symbols negates scoping problems
+    val updatedBody = body.transform {
+      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).name
+    }.asInstanceOf[Term]
+
+    freshParams.foldRight[Function](Opaque(updatedBody)) { (params, acc) => Lam(params, acc) }
   }
 
-  // This should be an in-order traversal?
-  private def convertAnonymousFunction(func: Term.AnonymousFunction): (Term, List[Var]) = {
+  private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
     val namedParams = mutable.ListBuffer.empty[Var]
+
+    // This assumes an in-order traversal, although I'm not aware if this is guaranteed
     val transformedFunc = func.transform {
       case Term.Ascribe(Term.Placeholder(), tpe) =>
-        val freshParam = Term.fresh("placeholder")
-        namedParams += Var(freshParam, Some(tpe))
-        freshParam
+        val namedParam = Var(Some("placeholder"), Some(tpe))
+        namedParams += namedParam
+        namedParam.name
       case _: Term.Placeholder =>
-        val freshParam = Term.fresh("placeholder")
-        namedParams += Var(freshParam, None)
-        freshParam
-    }
+        val namedParam = Var(Some("placeholder"), None)
+        namedParams += namedParam
+        namedParam.name
+    }.asInstanceOf[Term]
 
-    (transformedFunc.asInstanceOf[Term], namedParams.toList)
+    namedParams.toList.foldRight[Function](Opaque(transformedFunc)) { (param, acc) => Lam(param, acc) }
   }
 
   def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
@@ -187,20 +205,9 @@ object Function {
 
     val func = f match {
       // * Lambda - look at parameter lists
-      case func: Term.Function =>
-        val (params, body) = splitFunction(func)
-        // TODO: REMEMBER TO DO THIS!!!
-        // TODO: rename params, or whatever approach to fix name clashing
-        params.foldRight[Function](Opaque(body)) { (params, acc) =>
-          Lam(params.map(p => Var(Term.Name(p.name.toString))), acc)
-        }
+      case func: Term.Function => buildFromFunctionTerm(func)
       // * Lambda with placeholder syntax (similar as above)
-      case func: Term.AnonymousFunction =>
-        // TODO: bundle the placeholderMap into the Function datatype
-        val (convertedFunc, params) = convertAnonymousFunction(func)
-        params.foldRight[Function](Opaque(convertedFunc)) { (param, acc) =>
-          Lam(List(param), acc)
-        }
+      case func: Term.AnonymousFunction => buildFromAnonFunctionTerm(func)
       // * Otherwise - just treat as opaque
       // This should be fine? We'll just do function application like func(arg1)(arg2) without being able to substitute
       case _ => Opaque(f)
