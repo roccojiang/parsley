@@ -88,7 +88,16 @@ object Function {
   case class Lam(xs: List[Var], f: Function) extends Function {
     val term = {
       val params = xs.map(x => Term.Param(List.empty, x.name, x.displayType, None))
-      q"(..$params) => ${f.term}"
+
+      f match {
+        // Syntactic sugar: transform single parameter lambdas to use placeholder syntax
+        case Opaque(t) if params.size == 1 =>
+          t.transform {
+            case v: Term.Name if v.isEqual(xs.head.name) => Term.Placeholder()
+          }.asInstanceOf[Term]
+        
+        case _ => q"(..$params) => ${f.term}"
+      }
     }
   }
   object Lam {
