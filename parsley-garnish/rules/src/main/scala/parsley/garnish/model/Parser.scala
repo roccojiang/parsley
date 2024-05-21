@@ -13,6 +13,7 @@ sealed abstract class Parser extends Product with Serializable {
   def term: Term
 
   private def simplifyFunctions: Parser = transform(this) {
+    case Pure(f) => Pure(f.simplify)
     case FMap(p, f) => FMap(p, f.simplify)
     case LiftImplicit(func, parsers) => LiftImplicit(func.simplify, parsers)
     case LiftExplicit(func, parsers) => LiftExplicit(func.simplify, parsers)

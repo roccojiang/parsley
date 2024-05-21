@@ -124,7 +124,7 @@ object Transformation {
 
         case p: LiftLike =>
           val liftedFunc: Parser = Pure(p.func match {
-            case Opaque(f @ Term.Name(_)) if p.parsers.size > 1 => Opaque(q"$f.curried")
+            case Opaque(f @ Term.Name(_), substs) if p.parsers.size > 1 => Opaque(q"$f.curried", substs)
             case _ => p.func
           })
           val curriedAp = p.parsers.foldLeft(liftedFunc)(_ <*> _)

@@ -27,4 +27,6 @@ object SimplifyComplexParsersTest {
     // val fmapComposition = string("saffron").map(s => add(s, "tarragon")).map(s => add(s, "turmeric"))
 
     // def defParser(p: Parsley[String]): Parsley[String] = p.map(s => add(s, "oregano")).map(s => add(s, "paprika"))
+
+    val test = pure("parsley").map(x => x)
 }

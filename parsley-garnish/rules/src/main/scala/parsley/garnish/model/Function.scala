@@ -19,14 +19,15 @@ sealed abstract class Function extends Product with Serializable {
     case Var(name, _) if name.isEqual(x.name) => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
-    case Opaque(t) =>
-      Opaque(t.transform {
-        case name: Term.Name =>
-          // Must compare structurally, still cannot use referential equality in this case
-          // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
-          if (name.isEqual(x.name)) y.term
-          else name
-      }.asInstanceOf[Term])
+    case Opaque(t, substs) =>
+      Opaque(t, substs.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name.value -> y))
+      // Opaque(t.transform {
+      //   case name: Term.Name =>
+      //     // Must compare structurally, still cannot use referential equality in this case
+      //     // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
+      //     if (name.isEqual(x.name)) y.term
+      //     else name
+      // }.asInstanceOf[Term])
     case _ => this
   }
 
@@ -49,27 +50,50 @@ sealed abstract class Function extends Product with Serializable {
     }
     case Lam(xs, f) => Lam(xs, f.reduce)
 
+    case Opaque(t, substs) => Opaque(t, substs.map { case (x, y) => x -> y.reduce })
+
     case _ => this
   }}
 
   private def normal: Boolean = this match {
     case App(Lam(_, _), _*) => false
     case App(f, xs @ _*) => f.normal && xs.forall(_.normal)
+    case Opaque(_, substs) => substs.values.forall(_.normal)
     case _ => true
   }
 
-  // override def toString: String = term.syntax
-  override def toString: String = this match {
-    case Opaque(t) => s"${Console.RED}${t.syntax}${Console.RESET}"
-    case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
-    case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
-    case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
-  }
+  override def toString: String = term.syntax
+  // override def toString: String = this match {
+  //   case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
+  //   case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
+  //   case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
+  //   case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
+  // }
 }
 
 object Function {
-  case class Opaque(t: Term) extends Function {
-    val term = t
+  case class Opaque(t: Term, substs: Map[String, Function] = Map.empty) extends Function {
+    val term = t.transform {
+      case name: Term.Name =>
+        // Must compare structurally, still cannot use referential equality in this case
+        // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
+        substs.get(name.value) match {
+          case Some(y) => y.term
+          case None => name
+        }
+        // substs.find { case (x, _) => name.isEqual(x.name) } match {
+        //   case Some((_, y)) => y.term
+        //   case None => name
+        // }
+    }.asInstanceOf[Term]
+          // Opaque(t.transform {
+      //   case name: Term.Name =>
+      //     // Must compare structurally, still cannot use referential equality in this case
+      //     // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
+      //     if (name.isEqual(x.name)) y.term
+      //     else name
+      // }.asInstanceOf[Term])
+
   }
 
   case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
