@@ -87,11 +87,12 @@ object Function {
       val params = xs.map(x => Term.Param(List.empty, x.name, x.displayType, None))
 
       f match {
+        // TODO: this breaks things for a few edge cases, so disabled for now
         // Syntactic sugar: transform single parameter lambdas to use placeholder syntax
-        case Opaque(t) if params.size == 1 =>
-          t.transform {
-            case v: Term.Name if v.isEqual(xs.head.name) => Term.Placeholder()
-        }.asInstanceOf[Term]
+        // case Opaque(t) if params.size == 1 =>
+        //   t.transform {
+        //     case v: Term.Name if v.isEqual(xs.head.name) => Term.Placeholder()
+        // }.asInstanceOf[Term]
         
         case _ => q"(..$params) => ${f.term}"
       }

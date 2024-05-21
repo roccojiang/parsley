@@ -13,6 +13,7 @@ object LeftRecTest {
   // lazy val p: Parsley[String] = chain.postfix(string("ca"))(pure(identity[String] _).map(((xs: String) => (ba: String) => xs + ba).compose(_)).map(flip(_)) <*> string("ba"))
   lazy val p: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh28 => fresh29 => ((xs: String) => (ba: String) => xs + ba)(fresh29)(fresh28)))
   // lazy val p2: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh18 => (fresh10 => fresh10)(_) + fresh18))
+  lazy val p2: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh11 => (fresh3 => fresh3)(_) + fresh11))
 
   // TODO: output won't compile due to missing parameter types, need to fix this
   lazy val q: Parsley[Int] = q.map((xs: Int) => (c: Char) => c.asDigit + xs) <*> digit | digit.map(_.asDigit)

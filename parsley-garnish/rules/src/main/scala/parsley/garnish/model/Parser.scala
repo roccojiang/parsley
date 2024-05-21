@@ -12,6 +12,14 @@ sealed abstract class Parser extends Product with Serializable {
 
   def term: Term
 
+  private def simplifyFunctions: Parser = transform(this) {
+    case FMap(p, f) => FMap(p, f.simplify)
+    case LiftImplicit(func, parsers) => LiftImplicit(func.simplify, parsers)
+    case LiftExplicit(func, parsers) => LiftExplicit(func.simplify, parsers)
+    case Zipped(func, parsers) => Zipped(func.simplify, parsers)
+    case Bridge(func, parsers) => Bridge(func.simplify, parsers)
+  }
+
   def simplify: Parser = transform(this) {
     // p <|> empty == p
     case Choice(p, Empty) => p
@@ -33,7 +41,8 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(Pure(x), f) => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
-  }
+
+  }.simplifyFunctions
 
   override def toString: String = term.syntax
 }
@@ -168,27 +177,32 @@ object Parser {
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 
+  // Bottom-up transformation order
   private def transform(p: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
-    if (pf.isDefinedAt(p)) {
-      transform(pf(p))(pf) // apply pf, then recurse over the result
-    } else p match {
+    val transformed = p match {
       case Choice(p, q) => Choice(transform(p)(pf), transform(q)(pf))
       case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
-      case FMap(p, f) => FMap(transform(p)(pf), f.simplify)
+      case FMap(p, f) => FMap(transform(p)(pf), f)
       case Many(p) => Many(transform(p)(pf))
       case Postfix(tpe, p, op) => Postfix(tpe, transform(p)(pf), transform(op)(pf))
-      case LiftImplicit(f, ps) => LiftImplicit(f.simplify, ps.map(transform(_)(pf)))
-      case LiftExplicit(f, ps) => LiftExplicit(f.simplify, ps.map(transform(_)(pf)))
-      case Zipped(f, ps) => Zipped(f.simplify, ps.map(transform(_)(pf)))
-      case Bridge(f, ps) => Bridge(f.simplify, ps.map(transform(_)(pf)))
-      case Pure(f) => Pure(f.simplify)
+      case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(transform(_)(pf)))
+      case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(transform(_)(pf)))
+      case Zipped(f, ps) => Zipped(f, ps.map(transform(_)(pf)))
+      case Bridge(f, ps) => Bridge(f, ps.map(transform(_)(pf)))
+      case Pure(f) => Pure(f)
       case _ => p
+    }
+  
+    if (pf.isDefinedAt(transformed)) {
+      pf(transformed) // apply pf after recursion
+    } else {
+      transformed
     }
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
-    def <*>(q: Parser): Parser = Ap(p, q) //.simplify
-    def <|>(q: Parser): Parser = Choice(p, q) //.simplify
-    def map(f: Function): Parser = FMap(p, f) //.simplify
+    def <*>(q: Parser): Parser = Ap(p, q)
+    def <|>(q: Parser): Parser = Choice(p, q)
+    def map(f: Function): Parser = FMap(p, f)
   }
 }
