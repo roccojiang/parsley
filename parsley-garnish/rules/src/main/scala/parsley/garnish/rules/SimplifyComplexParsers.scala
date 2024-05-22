@@ -14,7 +14,7 @@ class SimplifyComplexParsers extends SemanticRule("SimplifyComplexParsers") {
 
     getAllParserDefns.map { case ParserDefinition(_, parser, _, originalTree) =>
       println(parser)
-      val simplifiedParser = parser.simplify
+      val simplifiedParser = parser.normalise
       if (simplifiedParser != parser) {
         val simplifiedParserTerm = simplifiedParser.term.syntax
         Patch.replaceTree(originalTree, simplifiedParserTerm)

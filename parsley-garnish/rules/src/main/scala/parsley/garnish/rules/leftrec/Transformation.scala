@@ -46,7 +46,7 @@ object Transformation {
       // TODO: import postfix if not in scope
       case _ =>
         println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
-        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
+        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).normalise)
     }
   }
 

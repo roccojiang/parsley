@@ -13,15 +13,15 @@ sealed abstract class Parser extends Product with Serializable {
   def term: Term
 
   private def simplifyFunctions: Parser = transform(this) {
-    case Pure(f) => Pure(f.simplify)
-    case FMap(p, f) => FMap(p, f.simplify)
-    case LiftImplicit(func, parsers) => LiftImplicit(func.simplify, parsers)
-    case LiftExplicit(func, parsers) => LiftExplicit(func.simplify, parsers)
-    case Zipped(func, parsers) => Zipped(func.simplify, parsers)
-    case Bridge(func, parsers) => Bridge(func.simplify, parsers)
+    case Pure(f) => Pure(f.normalise)
+    case FMap(p, f) => FMap(p, f.normalise)
+    case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
+    case LiftExplicit(func, parsers) => LiftExplicit(func.normalise, parsers)
+    case Zipped(func, parsers) => Zipped(func.normalise, parsers)
+    case Bridge(func, parsers) => Bridge(func.normalise, parsers)
   }
 
-  def simplify: Parser = transform(this) {
+  def normalise: Parser = rewrite(this) {
     // p <|> empty == p
     case Choice(p, Empty) => p
     // empty <|> q == q
@@ -178,9 +178,9 @@ object Parser {
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 
-  // Bottom-up transformation order
-  private def transform(p: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
-    val transformed = p match {
+  // Bottom-up transformation
+  private def transform(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
+    val p = parser match {
       case Choice(p, q) => Choice(transform(p)(pf), transform(q)(pf))
       case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
       case FMap(p, f) => FMap(transform(p)(pf), f)
@@ -191,14 +191,17 @@ object Parser {
       case Zipped(f, ps) => Zipped(f, ps.map(transform(_)(pf)))
       case Bridge(f, ps) => Bridge(f, ps.map(transform(_)(pf)))
       case Pure(f) => Pure(f)
-      case _ => p
+      case _ => parser
     }
   
-    if (pf.isDefinedAt(transformed)) {
-      pf(transformed) // apply pf after recursion
-    } else {
-      transformed
-    }
+    if (pf.isDefinedAt(p)) pf(p) else p
+  }
+
+  // Transformation to normal form in a bottom-up manner
+  private def rewrite(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
+    def pf0(p: Parser) = if (pf.isDefinedAt(p)) rewrite(pf(p))(pf) else p
+
+    transform(parser)(pf0)
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {

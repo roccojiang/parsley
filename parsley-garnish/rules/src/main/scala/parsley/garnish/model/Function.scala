@@ -21,18 +21,11 @@ sealed abstract class Function extends Product with Serializable {
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
     case Opaque(t, substs) =>
       Opaque(t, substs.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name.value -> y))
-      // Opaque(t.transform {
-      //   case name: Term.Name =>
-      //     // Must compare structurally, still cannot use referential equality in this case
-      //     // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
-      //     if (name.isEqual(x.name)) y.term
-      //     else name
-      // }.asInstanceOf[Term])
     case _ => this
   }
 
   // TODO: figure out the correct reduction/normalisation strategy
-  def simplify: Function =
+  def normalise: Function =
     if (this.normal) this else this.reduce
 
   def reduce: Function = {
@@ -81,19 +74,7 @@ object Function {
           case Some(y) => y.term
           case None => name
         }
-        // substs.find { case (x, _) => name.isEqual(x.name) } match {
-        //   case Some((_, y)) => y.term
-        //   case None => name
-        // }
     }.asInstanceOf[Term]
-          // Opaque(t.transform {
-      //   case name: Term.Name =>
-      //     // Must compare structurally, still cannot use referential equality in this case
-      //     // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
-      //     if (name.isEqual(x.name)) y.term
-      //     else name
-      // }.asInstanceOf[Term])
-
   }
 
   case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
@@ -161,31 +142,6 @@ object Function {
   def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
 
-  /*
-  private def toFunc(f: Opaque, args: List[List[FuncArgument]]): Function = {
-    // alpha conversion: assign fresh variable names
-    val freshArgs = args.map(_.map {
-      case ParameterArg(_, tpe) => ParameterArg(Term.fresh(), tpe)
-      case arg => arg
-    })
-
-    val apps = freshArgs.foldLeft(f: Function) { (acc, args) => {
-      val params = args.map {
-        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
-        case ConcreteArg(arg, _)     => Opaque(arg)
-      }
-      App(acc, params: _*)
-    }}
-
-    freshArgs.foldRight(apps) { (args, acc) => {
-      val params = args.collect {
-        case ParameterArg(name, tpe) => Var(name, tpe.map(_.tpe))
-      }
-      if (params.isEmpty) acc else Lam(params, acc)
-    }}
-  }
-  */
-
   private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Function = {
     type ParameterLists = List[List[Term.Param]]
 
@@ -247,49 +203,4 @@ object Function {
     println(s"\t RESULTFUNC: $func")
     func
   }
-
-  /*
-  def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
-    def buildFunc(g: Term.Name) = {
-      // println(s"${g.structure} func within $debugName:
-      //   ${g.synthetics} | ${g.synthetics.structure} )}")" +
-      
-      /*
-      println(s"""${g.structure} func within $debugName:
-                 |\tsynthetics = ${g.synthetics} | ${g.synthetics.structure}
-                 |\tsymbol = ${g.symbol} | ${g.symbol.info.map(_.signature.structure)}
-                 """.stripMargin)
-                 */
-      val typeSignature = getInferredTypeSignature(g)
-      // println(s">> typeSignature: $typeSignature")
-      val funcArgs = MethodParametersAnalyzer.getFuncArguments(f)
-      val funcArgsWithTypes = MethodParametersAnalyzer.updateFuncArgTypes(funcArgs, typeSignature)
-
-      val curriedArgs = funcArgsWithTypes.flatten.map(List(_))
-
-      val lambdaTerm = Function.toFunc(Opaque(g), curriedArgs)
-      // println(s">> LAMBDATERM: $lambdaTerm")
-      lambdaTerm
-    }
-
-    def tryBuildFunc(f: Term): Option[Function] = {
-      parsley.garnish.utils.printInfo(f, debugName)
-
-
-      f.collect {
-        case Term.Apply.After_4_6_0(g: Term.Name, _) =>
-          // println(s"$g symbol sig ${g.symbol.info.map(i => i.signature.structure)}") // this gets a class signature, it seems
-          buildFunc(g)
-      }.headOption.orElse(f match {
-        case f: Term.Name =>
-          Some(buildFunc(f))
-        case _ => None
-      })
-
-      // newApproach
-    }
-
-    tryBuildFunc(f).getOrElse(Opaque(f))
-  }
-  */
 }
