@@ -5,10 +5,6 @@ import scala.meta._
 import scala.meta.contrib._
 import scalafix.v1._
 
-import parsley.garnish.analysis.MethodParametersAnalyzer
-import parsley.garnish.analysis.MethodParametersAnalyzer.{ConcreteArg, FuncArgument, ParameterArg}
-import parsley.garnish.analysis.TypeSignatureAnalyzer.getInferredTypeSignature
-
 sealed abstract class Function extends Product with Serializable {
   import Function._
 
@@ -79,7 +75,7 @@ object Function {
 
   case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
     // Enforce Barendregt's convention
-    val name = Term.fresh(prefix.getOrElse("fresh"))
+    val name = Term.fresh(prefix.getOrElse("_x"))
     val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
   }
   object Var {
@@ -155,7 +151,7 @@ object Function {
 
     // Replace each method parameter with a fresh variable to preserve Barendregt's convention
     val freshReplacements = reversedParamLists.reverse.map(_.collect {
-      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var(Some("lambda_param"), decltpe)
+      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var(Some("_l"), decltpe)
     })
     val freshParams = freshReplacements.map(_.map(_._2))
     val symbolsMap = freshReplacements.flatten.toMap
@@ -175,11 +171,11 @@ object Function {
     // This assumes an in-order traversal, although I'm not aware if this is guaranteed
     val transformedFunc = func.transform {
       case Term.Ascribe(Term.Placeholder(), tpe) =>
-        val namedParam = Var(Some("placeholder"), Some(tpe))
+        val namedParam = Var(Some("_p"), Some(tpe))
         namedParams += namedParam
         namedParam.name
       case _: Term.Placeholder =>
-        val namedParam = Var(Some("placeholder"), None)
+        val namedParam = Var(Some("_p"), None)
         namedParams += namedParam
         namedParam.name
     }.asInstanceOf[Term]

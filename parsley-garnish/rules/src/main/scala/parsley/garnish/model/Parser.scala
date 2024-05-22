@@ -134,7 +134,8 @@ object Parser {
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
     // "pure(x)"
-    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
+    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) =>
+      Pure(Function.buildFuncFromTerm(x, "PURE"))
     // "p.map(f)"
     case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) =>
       val lambda = Function.buildFuncFromTerm(f, "MAP")
