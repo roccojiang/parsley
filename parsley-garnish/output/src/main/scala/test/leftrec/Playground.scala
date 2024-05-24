@@ -5,6 +5,7 @@ import parsley.Parsley._
 import parsley.character._
 import parsley.expr.chain
 import parsley.syntax.lift._
+import parsley.generic._
 
 object Playground {
   // case class Add(a: Int, b: Int)
@@ -16,12 +17,17 @@ object Playground {
   // TODO: try a lift3 as below
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
+
+  case class AddBridged(a: Expr, b: Expr) extends Expr
+  object AddBridged extends ParserBridge2[Expr, Expr, AddBridged]
   // val p = Add.lift(string("a").map(Atom(_)), Atom.lift(string("b")))
   // val q = lift2(Add(_, _), string("a"), string("b"))
 
-  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom))(string("a").map(fresh64 => fresh61 => Add(fresh61)(Atom(fresh64))))
+  lazy val r: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(fresh72 => fresh69 => Add.curried(fresh69)(Atom(fresh72))))
 
-  lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom))(string("a").map(fresh31 => fresh27 => fresh28 => Wow(fresh28)(Atom(fresh31))(fresh27)) <*> string("b").map(Atom))
+  lazy val r2: Parsley[Expr] = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").map(fresh97 => fresh94 => AddBridged.curried(fresh94)(Atom(fresh97))))
+
+  lazy val s: Parsley[Expr] = chain.postfix[Expr](string("c").map(Atom(_)))(string("a").map(fresh39 => fresh35 => fresh36 => Wow.curried(fresh36)(Atom(fresh39))(fresh35)) <*> string("b").map(Atom(_)))
  
   // TODO: figure out how to convert r2 to rManual - definition of as = this *> pure(x)  or  this.map(_ => x)
   // lazy val rManual = chain.postfix[Expr](string("b").map(Atom(_)))(string("a").as(Add(_, Atom("a"))))

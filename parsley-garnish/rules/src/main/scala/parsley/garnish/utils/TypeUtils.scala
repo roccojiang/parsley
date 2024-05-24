@@ -21,7 +21,7 @@ object TypeUtils {
     }
   }
 
-  private def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
+  def getSemanticType(sig: Signature): Option[SemanticType] = sig match {
     // Which symbols have value/method signatures seems to differ between Scala versions
     case ValueSignature(tpe)               => Some(tpe)
     case MethodSignature(_, _, returnType) => Some(returnType)

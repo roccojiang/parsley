@@ -6,15 +6,16 @@ package test.leftrec
 import parsley.Parsley
 import parsley.Parsley._
 import parsley.character._
+import parsley.expr.chain
 
 object LeftRecTest {
+
+  lazy val testMany: Parsley[List[String]] = many(p2) // TODO: figure out a left-recursive parser with many
+
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
 
-  // TODO: for certain examples like this one with lambdas (or if we can find the function definition to inline?), is it possible to evaluate the flip at compile time?
-  // TODO: same thing with if we see pure(identity) as well
-  lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
+  // lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
   lazy val p2: Parsley[String] = p2.map((xs: String) => (ba: String) => xs + ba) <*> string("ba") | string("ca")
-
 
   val pl = pure(identity[String] _).map(((xs: String) => (ba: Int) => xs + ba).compose(_))
   val flipped = pl.map(flip(_))

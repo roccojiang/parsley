@@ -1,5 +1,6 @@
 package parsley.garnish.model
 
+import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
@@ -11,7 +12,16 @@ sealed abstract class Parser extends Product with Serializable {
 
   def term: Term
 
-  def simplify: Parser = transform(this) {
+  private def simplifyFunctions: Parser = transform(this) {
+    case Pure(f) => Pure(f.normalise)
+    case FMap(p, f) => FMap(p, f.normalise)
+    case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
+    case LiftExplicit(func, parsers) => LiftExplicit(func.normalise, parsers)
+    case Zipped(func, parsers) => Zipped(func.normalise, parsers)
+    case Bridge(func, parsers) => Bridge(func.normalise, parsers)
+  }
+
+  def normalise: Parser = rewrite(this) {
     // p <|> empty == p
     case Choice(p, Empty) => p
     // empty <|> q == q
@@ -26,15 +36,14 @@ sealed abstract class Parser extends Product with Serializable {
     // pure(f) <*> x == x.map(f)
     case Ap(Pure(f), x) => FMap(x, f)
 
-    // TODO: prove empty.map(f) == empty
-    // possibly via empty <*> pure x == empty and mf <*> pure x == pure ($ x) <*> mf
-    // or by parametricity
+    // empty.map(f) == empty  [proof in report appendix]
     case FMap(Empty, _) => Empty
     // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
     case FMap(Pure(x), f) => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
-  }
+
+  }.simplifyFunctions
 
   override def toString: String = term.syntax
 }
@@ -76,6 +85,11 @@ object Parser {
     val term = q"many(${p.term})"
   }
 
+  /* p: Parser[A], some(p): Parser[List[A]] */
+  final case class SomeP(p: Parser) extends Parser {
+    val term = q"some(${p.term})"
+  }
+
   /* string(s): Parser[String] */
   final case class Str(s: String) extends Parser {
     val term = q"string($s)"
@@ -106,6 +120,13 @@ object Parser {
   final case class Zipped(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
+  final case class Bridge(func: Function, parsers: List[Parser]) extends LiftLike {
+    val term = q"${func.term}(..${parsers.map(_.term)})"
+  }
+
+  final case class Named(name: String, parser: Parser) extends Parser {
+    val term = q"$name(${parser.term})"
+  }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
@@ -115,16 +136,21 @@ object Parser {
     // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
     // against matching multiple times using SymbolMatchers
 
-    case t: Term.Name => NonTerminal(t.symbol)
-
     // "string(s)"
     case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) =>
       val s = str.text.stripPrefix("\"").stripSuffix("\"")
       Str(s)
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
+    // "many(p)"
+    case Term.Apply.After_4_6_0(Matchers.many(_), Term.ArgClause(List(p), _)) =>
+      Many(apply(p))
+    // "some(p)"
+    case Term.Apply.After_4_6_0(Matchers.some(_), Term.ArgClause(List(p), _)) =>
+      SomeP(apply(p))
     // "pure(x)"
-    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) => Pure(Opaque(x))
+    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) =>
+      Pure(Function.buildFuncFromTerm(x, "PURE"))
     // "p.map(f)"
     case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) =>
       val lambda = Function.buildFuncFromTerm(f, "MAP")
@@ -152,31 +178,54 @@ object Parser {
     case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
       val lambda = Function.buildFuncFromTerm(f, "ZIPPED")
       Zipped(lambda, ps.map(apply))
+    
+    // "BridgeCons(p1, ..., pN)"
+    case Term.Apply.After_4_6_0(fun, ps) if fun.synthetics.exists(cond(_) {
+        case SelectTree(_, IdTree(symInfo)) => Matchers.bridgeApply.matches(symInfo.symbol)
+    }) =>
+      val lambda = Function.buildFuncFromTerm(fun, "BRIDGE")
+      Bridge(lambda, ps.map(apply)) // TODO: I haven't unpacked the ArgClause here and directly mapped, does this work?
+
+    // any other unrecognised term names will be assumed to be a non-terminal
+    // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
+    case t: Term.Name =>
+      println(s"HHSDFJHISDJKFF >>> $t matches ${SymbolMatcher.normalized("parsley").matches(t.symbol)}")
+      NonTerminal(t.symbol)
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
   }
 
-  private def transform(p: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
-    if (pf.isDefinedAt(p)) {
-      transform(pf(p))(pf) // apply pf, then recurse over the result
-    } else p match {
+  // Bottom-up transformation
+  private def transform(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
+    val p = parser match {
       case Choice(p, q) => Choice(transform(p)(pf), transform(q)(pf))
       case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
-      case FMap(p, f) => FMap(transform(p)(pf), f.simplify)
+      case FMap(p, f) => FMap(transform(p)(pf), f)
       case Many(p) => Many(transform(p)(pf))
+      case SomeP(p) => SomeP(transform(p)(pf))
       case Postfix(tpe, p, op) => Postfix(tpe, transform(p)(pf), transform(op)(pf))
-      case LiftImplicit(f, ps) => LiftImplicit(f.simplify, ps.map(transform(_)(pf)))
-      case LiftExplicit(f, ps) => LiftExplicit(f.simplify, ps.map(transform(_)(pf)))
-      case Zipped(f, ps) => Zipped(f.simplify, ps.map(transform(_)(pf)))
-      case Pure(f) => Pure(f.simplify)
-      case _ => p
+      case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(transform(_)(pf)))
+      case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(transform(_)(pf)))
+      case Zipped(f, ps) => Zipped(f, ps.map(transform(_)(pf)))
+      case Bridge(f, ps) => Bridge(f, ps.map(transform(_)(pf)))
+      case Pure(f) => Pure(f)
+      case _ => parser
     }
+  
+    if (pf.isDefinedAt(p)) pf(p) else p
+  }
+
+  // Transformation to normal form in a bottom-up manner
+  private def rewrite(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
+    def pf0(p: Parser) = if (pf.isDefinedAt(p)) rewrite(pf(p))(pf) else p
+
+    transform(parser)(pf0)
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
-    def <*>(q: Parser): Parser = Ap(p, q).simplify
-    def <|>(q: Parser): Parser = Choice(p, q).simplify
-    def map(f: Function): Parser = FMap(p, f).simplify
+    def <*>(q: Parser): Parser = Ap(p, q)
+    def <|>(q: Parser): Parser = Choice(p, q)
+    def map(f: Function): Parser = FMap(p, f)
   }
 }

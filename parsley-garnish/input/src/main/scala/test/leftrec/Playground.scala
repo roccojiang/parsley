@@ -8,6 +8,7 @@ import parsley.Parsley._
 import parsley.character._
 import parsley.expr.chain
 import parsley.syntax.lift._
+import parsley.generic._
 
 object Playground {
   // case class Add(a: Int, b: Int)
@@ -19,10 +20,15 @@ object Playground {
   // TODO: try a lift3 as below
   case class Wow(a: Expr, b: Expr, c: Expr) extends Expr
   case class Atom(a: String) extends Expr
+
+  case class AddBridged(a: Expr, b: Expr) extends Expr
+  object AddBridged extends ParserBridge2[Expr, Expr, AddBridged]
   // val p = Add.lift(string("a").map(Atom(_)), Atom.lift(string("b")))
   // val q = lift2(Add(_, _), string("a"), string("b"))
 
   lazy val r: Parsley[Expr] = Add.lift(r, string("a").map(Atom(_))) | string("b").map(Atom(_))
+
+  lazy val r2: Parsley[Expr] = AddBridged(r2, string("a").map(Atom(_))) | string("b").map(Atom(_))
 
   lazy val s: Parsley[Expr] = Wow.lift(s, string("a").map(Atom(_)), string("b").map(Atom(_))) | string("c").map(Atom(_))
  

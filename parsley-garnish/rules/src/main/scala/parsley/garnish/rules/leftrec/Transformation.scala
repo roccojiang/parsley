@@ -40,13 +40,14 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    leftRec match {
+    leftRec.normalise match {
       case Empty => None
-      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
+      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored -- should this be looking for any parser which can parse empty?
       // TODO: import postfix if not in scope
-      case _ =>
+      // TODO: report can't left factor if there are impure parsers
+      case leftRec =>
         println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
-        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
+        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).normalise)
     }
   }
 
@@ -80,12 +81,8 @@ object Transformation {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
-        val empty = if (pe.isDefined && qe.isDefined) {
-          // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
-          Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
-        } else {
-          None
-        }
+        val empty = if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
+                    else None
 
         val lefts = {
           val llr = pl.map(flip) <*> q
@@ -113,22 +110,39 @@ object Transformation {
       }
 
       nt match {
-        case NonTerminal(sym) => unfoldNonTerminal(sym)
+        // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
+        case NonTerminal(sym) if env contains sym => unfoldNonTerminal(sym)
 
         case p@Str(_) => UnfoldedProduction(None, p, Empty)
         case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
         case Empty => UnfoldedProduction(None, Empty, Empty)
 
-        case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
+        case Many(p) =>
+          val UnfoldedProduction(_, pn, pl) = unfold0(visited, p)
 
-        // TODO: don't just convert this into curried form with a chain of <*>s
+          val lefts = pl.map {
+            val f = Var()
+            val xs = Var()
+            val nt = Var()
+
+            // \f xs nt -> f nt : xs
+            Lam(f, Lam(xs, Lam(nt, consH(App(f, nt), xs))))
+          } <*> Many(p)
+
+          val nonLefts = SomeP(pn)
+
+          UnfoldedProduction(Some(Opaque(q"Nil")), nonLefts, lefts)
+
+        case SomeP(p) => unfold0(visited, p.map(cons) <*> Many(p))
+
+        case FMap(p, f) => unfold0(visited, Pure(f) <*> p)
+
         case p: LiftLike =>
-          val liftedFunc: Parser = Pure(p.func)
+          val liftedFunc: Parser = Pure(p.func match {
+            case Opaque(f @ Term.Name(_), substs) if p.parsers.size > 1 => Opaque(q"$f.curried", substs)
+            case _ => p.func
+          })
           val curriedAp = p.parsers.foldLeft(liftedFunc)(_ <*> _)
-
-          // TODO
-          val pair: (Any, Parser) = (Pure(p.func), p.parsers.head)
-          val curried = p.parsers.tail.foldLeft(pair)((_, _))
 
           unfold0(visited, curriedAp)
 
