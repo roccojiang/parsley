@@ -5,23 +5,14 @@ import scala.meta._
 import scalafix.v1._
 
 import Function._
-import parsley.garnish.utils.Matchers
+import parsley.garnish.implicits.TermOps
 
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
 
   def term: Term
 
-  private def simplifyFunctions: Parser = transform(this) {
-    case Pure(f) => Pure(f.normalise)
-    case FMap(p, f) => FMap(p, f.normalise)
-    case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
-    case LiftExplicit(func, parsers) => LiftExplicit(func.normalise, parsers)
-    case Zipped(func, parsers) => Zipped(func.normalise, parsers)
-    case Bridge(func, parsers) => Bridge(func.normalise, parsers)
-  }
-
-  def normalise: Parser = rewrite(this) {
+  def normalise: Parser = this.rewrite {
     // p <|> empty == p
     case Choice(p, Empty) => p
     // empty <|> q == q
@@ -45,7 +36,43 @@ sealed abstract class Parser extends Product with Serializable {
 
   }.simplifyFunctions
 
-  override def toString: String = term.syntax
+  private def simplifyFunctions: Parser = this.transform {
+    case Pure(f) => Pure(f.normalise)
+    case FMap(p, f) => FMap(p, f.normalise)
+    case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
+    case LiftExplicit(func, parsers) => LiftExplicit(func.normalise, parsers)
+    case Zipped(func, parsers) => Zipped(func.normalise, parsers)
+    case Bridge(func, parsers) => Bridge(func.normalise, parsers)
+  }
+
+  // Bottom-up transformation
+  private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
+    val p = this match {
+      case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
+      case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
+      case FMap(p, f) => FMap(p.transform(pf), f)
+      case Many(p) => Many(p.transform(pf))
+      case SomeP(p) => SomeP(p.transform(pf))
+      case Postfix(tpe, p, op) => Postfix(tpe, p.transform(pf), op.transform(pf))
+      case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(_.transform(pf)))
+      case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(_.transform(pf)))
+      case Zipped(f, ps) => Zipped(f, ps.map(_.transform(pf)))
+      case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
+      case Pure(f) => Pure(f)
+      case _ => this
+    }
+  
+    if (pf.isDefinedAt(p)) pf(p) else p
+  }
+
+  // Transformation to normal form in a bottom-up manner
+  private def rewrite(pf: PartialFunction[Parser, Parser]): Parser = {
+    def pf0(p: Parser) = if (pf.isDefinedAt(p)) pf(p).rewrite(pf) else p
+
+    this.transform(pf0)
+  }
+
+  // override def toString: String = term.syntax
 }
 
 object Parser {
@@ -57,42 +84,107 @@ object Parser {
   final case class Pure(x: Function) extends Parser {
     val term = q"pure(${x.term})"
   }
+  object Pure {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.pure")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Pure] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(x), _)) =>
+        Pure(Function.buildFuncFromTerm(x, "PURE"))
+    }
+  }
 
   final case object Empty extends Parser {
     val term = Term.Name("empty")
+    
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.empty")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Empty.type] = {
+      case matcher(Term.Name(_)) => Empty
+    }
   }
 
   /* p: Parser[A], q: Parser[A], p <|> q: Parser[A] */
   final case class Choice(p: Parser, q: Parser) extends Parser {
-    // TODO: think about this
-    // Note: this doesn't preserve the original combinator choice (i.e. <|> or |) but it doesn't really matter imo
+    // Note: for simplicity this doesn't preserve the original combinator choice (i.e. <|> or |)
     val term = q"${p.term} | ${q.term}"
   }
+  object Choice {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.`|`", "parsley.Parsley.`<|>`")
 
-  // TODO: generalise to lift2?
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Choice] = {
+      case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
+        Choice(p.toParser, q.toParser)
+    }
+  }
+
   /* p: Parser[A => B], q: Parser[A], p <*> q: Parser[B] */
   final case class Ap(p: Parser, q: Parser) extends Parser {
     val term = q"${p.term} <*> ${q.term}"
+  }
+  object Ap {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Ap] = {
+      case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
+        Ap(p.toParser, q.toParser)
+    }
   }
 
   /* p: Parser[A], f: Func[A => B], p.map(f): Parser[B] */
   final case class FMap(p: Parser, f: Function) extends Parser {
     val term = q"${p.term}.map(${f.term})"
   }
+  object FMap {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.map")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, FMap] = {
+      case Term.Apply.After_4_6_0(Term.Select(qual, matcher(_)), Term.ArgClause(List(f), _)) =>
+        FMap(qual.toParser, Function.buildFuncFromTerm(f, "MAP"))
+    }
+  }
 
   /* p: Parser[A], many(p): Parser[List[A]] */
   final case class Many(p: Parser) extends Parser {
     val term = q"many(${p.term})"
+  }
+  object Many {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.many")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Many] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(p), _)) =>
+        Many(p.toParser)
+    }
   }
 
   /* p: Parser[A], some(p): Parser[List[A]] */
   final case class SomeP(p: Parser) extends Parser {
     val term = q"some(${p.term})"
   }
+  object SomeP {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.some")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, SomeP] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(p), _)) =>
+        SomeP(p.toParser)
+    }
+  }
 
   /* string(s): Parser[String] */
-  final case class Str(s: String) extends Parser {
-    val term = q"string($s)"
+  final case class Str(s: String, implicitSyntax: Boolean = false) extends Parser {
+    val term = if (implicitSyntax) Lit.String(s) else q"string($s)"
+  }
+  object Str {
+    val stringLiftMatcher = SymbolMatcher.normalized("parsley.syntax.character.stringLift")
+    val matcher = SymbolMatcher.normalized("parsley.character.string")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Str] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(Lit.String(str)), _)) =>
+        Str(str, implicitSyntax = false)
+
+      case s @ Lit.String(str) if s.synthetics.exists(cond(_) {
+        case ApplyTree(IdTree(symInfo), _) => stringLiftMatcher.matches(symInfo.symbol)
+      }) => Str(str, implicitSyntax = true)
+    }
   }
 
   /* p: Parser[A], op: Parser[A => A], p postfix op: Parser[A] */
@@ -109,6 +201,20 @@ object Parser {
   final case class LiftImplicit(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"${func.term}.lift(..${parsers.map(_.term)})"
   }
+  object LiftImplicit {
+    val matcher = SymbolMatcher.normalized(
+      (0 to 22).map(i => s"parsley.syntax.lift.Lift$i#lift"): _*
+    )
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftImplicit] = {
+      case Term.Apply.After_4_6_0(Term.Select(f, matcher(_)), Term.ArgClause(ps, _)) =>
+        val func = Function.buildFuncFromTerm(f match {
+          case Term.ApplyType.After_4_6_0(g, _) => g
+          case _ => f
+        }, "LIFT_IMPLICIT")
+        LiftImplicit(func, ps.map(_.toParser))
+    }
+  }
 
   final case class LiftExplicit(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = {
@@ -116,12 +222,48 @@ object Parser {
       q"$liftN(${func.term}, ..${parsers.map(_.term)})"
     }
   }
+  object LiftExplicit {
+    val matcher = SymbolMatcher.normalized(
+      (1 to 22).map(i => s"parsley.lift.lift$i"): _*
+    )
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftExplicit] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(f :: ps, _)) =>
+        val func = Function.buildFuncFromTerm(f, "LIFT_EXPLICIT")
+        LiftExplicit(func, ps.map(_.toParser))
+    }
+  }
 
   final case class Zipped(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
+  object Zipped {
+    val matcher = SymbolMatcher.normalized(
+      (2 to 22).map(i => s"parsley.syntax.zipped.Zipped$i#zipped"): _*
+    )
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {
+      case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), matcher(_)), Term.ArgClause(List(f), _)) =>
+        val func = Function.buildFuncFromTerm(f, "ZIPPED")
+        Zipped(func, ps.map(_.toParser))
+    }
+  }
+
   final case class Bridge(func: Function, parsers: List[Parser]) extends LiftLike {
     val term = q"${func.term}(..${parsers.map(_.term)})"
+  }
+  object Bridge {
+    val matcher = SymbolMatcher.normalized(
+      (1 to 22).map(i => s"parsley.generic.ParserBridge$i#apply"): _*
+    )
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Bridge] = {
+      case Term.Apply.After_4_6_0(fun, ps) if fun.synthetics.exists(cond(_) {
+          case SelectTree(_, IdTree(symInfo)) => matcher.matches(symInfo.symbol)
+      }) =>
+        val func = Function.buildFuncFromTerm(fun, "BRIDGE")
+        Bridge(func, ps.map(_.toParser)) // TODO: I haven't unpacked the ArgClause here and directly mapped, does this work?
+      }
   }
 
   final case class Named(name: String, parser: Parser) extends Parser {
@@ -130,97 +272,6 @@ object Parser {
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
-  }
-
-  def apply(term: Term)(implicit doc: SemanticDocument): Parser = term match {
-    // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
-    // against matching multiple times using SymbolMatchers
-
-    // "string(s)"
-    case Term.Apply.After_4_6_0(Matchers.string(_), Term.ArgClause(List(str), _)) =>
-      val s = str.text.stripPrefix("\"").stripSuffix("\"")
-      Str(s)
-    // "empty"
-    case Matchers.empty(Term.Name(_)) => Empty
-    // "many(p)"
-    case Term.Apply.After_4_6_0(Matchers.many(_), Term.ArgClause(List(p), _)) =>
-      Many(apply(p))
-    // "some(p)"
-    case Term.Apply.After_4_6_0(Matchers.some(_), Term.ArgClause(List(p), _)) =>
-      SomeP(apply(p))
-    // "pure(x)"
-    case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) =>
-      Pure(Function.buildFuncFromTerm(x, "PURE"))
-    // "p.map(f)"
-    case Term.Apply.After_4_6_0(Term.Select(qual, Matchers.map(_)), Term.ArgClause(List(f), _)) =>
-      val lambda = Function.buildFuncFromTerm(f, "MAP")
-      FMap(apply(qual), lambda)
-    // "p <|> q" or "p | q"
-    case Term.ApplyInfix.After_4_6_0(p, Matchers.<|>(_), _, Term.ArgClause(List(q), _)) => Choice(apply(p), apply(q))
-    // "p <*> q"
-    case Term.ApplyInfix.After_4_6_0(p, Matchers.<*>(_), _, Term.ArgClause(List(q), _)) => Ap(apply(p), apply(q))
-
-    // "liftN(f, p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
-      val lambda = Function.buildFuncFromTerm(f, "LIFT2_EXPLICIT")
-      LiftExplicit(lambda, ps.map(apply))
-
-    // "f.lift(p1, ..., pN)"
-    case Term.Apply.After_4_6_0(Term.Select(f, Matchers.liftImplicit(_)), Term.ArgClause(ps, _)) =>
-      val func = f match {
-        case Term.ApplyType.After_4_6_0(g, _) => g
-        case _ => f
-      }
-      val lambda = Function.buildFuncFromTerm(func, "LIFT2_IMPLICIT")
-      LiftImplicit(lambda, ps.map(apply))
-
-    // "(p1, ..., pN).zipped(f)"
-    case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), Matchers.zipped(_)), Term.ArgClause(List(f), _)) =>
-      val lambda = Function.buildFuncFromTerm(f, "ZIPPED")
-      Zipped(lambda, ps.map(apply))
-    
-    // "BridgeCons(p1, ..., pN)"
-    case Term.Apply.After_4_6_0(fun, ps) if fun.synthetics.exists(cond(_) {
-        case SelectTree(_, IdTree(symInfo)) => Matchers.bridgeApply.matches(symInfo.symbol)
-    }) =>
-      val lambda = Function.buildFuncFromTerm(fun, "BRIDGE")
-      Bridge(lambda, ps.map(apply)) // TODO: I haven't unpacked the ArgClause here and directly mapped, does this work?
-
-    // any other unrecognised term names will be assumed to be a non-terminal
-    // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
-    case t: Term.Name =>
-      println(s"HHSDFJHISDJKFF >>> $t matches ${SymbolMatcher.normalized("parsley").matches(t.symbol)}")
-      NonTerminal(t.symbol)
-
-    // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
-    case unrecognisedTerm => Unknown(unrecognisedTerm)
-  }
-
-  // Bottom-up transformation
-  private def transform(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
-    val p = parser match {
-      case Choice(p, q) => Choice(transform(p)(pf), transform(q)(pf))
-      case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
-      case FMap(p, f) => FMap(transform(p)(pf), f)
-      case Many(p) => Many(transform(p)(pf))
-      case SomeP(p) => SomeP(transform(p)(pf))
-      case Postfix(tpe, p, op) => Postfix(tpe, transform(p)(pf), transform(op)(pf))
-      case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(transform(_)(pf)))
-      case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(transform(_)(pf)))
-      case Zipped(f, ps) => Zipped(f, ps.map(transform(_)(pf)))
-      case Bridge(f, ps) => Bridge(f, ps.map(transform(_)(pf)))
-      case Pure(f) => Pure(f)
-      case _ => parser
-    }
-  
-    if (pf.isDefinedAt(p)) pf(p) else p
-  }
-
-  // Transformation to normal form in a bottom-up manner
-  private def rewrite(parser: Parser)(pf: PartialFunction[Parser, Parser]): Parser = {
-    def pf0(p: Parser) = if (pf.isDefinedAt(p)) rewrite(pf(p))(pf) else p
-
-    transform(parser)(pf0)
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {

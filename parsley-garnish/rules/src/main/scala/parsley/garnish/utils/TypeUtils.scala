@@ -10,14 +10,14 @@ object TypeUtils {
    */
   def getParsleyType(s: Symbol)(implicit doc: SemanticDocument): Option[Type.Name] = {
     s.info.flatMap(info => getSemanticType(info.signature)).collect {
-      case TypeRef(_, Matchers.parsley(_), List(t)) => Type.Name(t.toString)
+      case TypeRef(_, parsleyMatcher(_), List(t)) => Type.Name(t.toString)
     }
   }
 
   def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
     case Some(info) => cond(getSemanticType(info.signature)) {
       // Parameterised type: Parsley[_]
-      case Some(TypeRef(_, Matchers.parsley(_), _)) => true
+      case Some(TypeRef(_, parsleyMatcher(_), _)) => true
     }
   }
 
@@ -28,4 +28,6 @@ object TypeUtils {
     // I don't think ClassSignatures hold any useful info?
     case _ => None
   }
+
+  private val parsleyMatcher = SymbolMatcher.normalized("parsley.Parsley")
 }

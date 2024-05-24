@@ -113,7 +113,7 @@ object Transformation {
         // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
         case NonTerminal(sym) if env contains sym => unfoldNonTerminal(sym)
 
-        case p@Str(_) => UnfoldedProduction(None, p, Empty)
+        case _: Str => UnfoldedProduction(None, nt, Empty)
         case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
         case Empty => UnfoldedProduction(None, Empty, Empty)
 
