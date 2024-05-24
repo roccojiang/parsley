@@ -4,7 +4,7 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserAnalyzer.{getNonTerminalParserDefns, ParserDefinition}
+import parsley.garnish.analysis.ParserTransformer.{getNonTerminalParserDefns, ParserDefinition}
 import parsley.garnish.model.{Function, Parser}
 import parsley.garnish.model.Function._
 import parsley.garnish.model.Parser._

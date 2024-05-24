@@ -2,7 +2,7 @@ package parsley.garnish.rules.leftrec
 
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserAnalyzer.{getNonTerminalParserDefns, ParserDefinition}
+import parsley.garnish.analysis.ParserTransformer.{getNonTerminalParserDefns, ParserDefinition}
 import Transformation.removeLeftRecursion
 
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {

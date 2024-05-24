@@ -7,7 +7,7 @@ import parsley.garnish.model.Parser
 import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 import parsley.garnish.implicits.TermOps
 
-object ParserAnalyzer {
+object ParserTransformer {
 
   final case class ParserDefinition(name: Term.Name, parser: Parser, tpe: Type.Name, originalTree: Term)
 
@@ -48,7 +48,4 @@ object ParserAnalyzer {
     assert(tpe.isDefined, s"expected a Parsley type for $name, got ${sym.info.get.signature}")
     ParserDefinition(name, body.toParser, tpe.get, body)
   }
-
-  // TODO: WE CAN GET WHICH STRING IMPLICIT VIA SYNTHETICS
-  // TODO: can we get the full qualified symbol of the e.g. stringLift function from the synthetics?
 }
