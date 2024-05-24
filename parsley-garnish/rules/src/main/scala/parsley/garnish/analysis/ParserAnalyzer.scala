@@ -5,6 +5,7 @@ import scalafix.v1._
 
 import parsley.garnish.model.Parser
 import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
+import parsley.garnish.utils.Matchers
 
 object ParserAnalyzer {
 

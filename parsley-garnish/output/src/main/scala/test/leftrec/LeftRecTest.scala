@@ -6,6 +6,7 @@ import parsley.character._
 import parsley.expr.chain
 
 object LeftRecTest {
+
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
 
   // TODO: for certain examples like this one with lambdas (or if we can find the function definition to inline?), is it possible to evaluate the flip at compile time?

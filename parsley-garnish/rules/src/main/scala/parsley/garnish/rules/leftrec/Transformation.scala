@@ -40,11 +40,12 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    leftRec match {
+    leftRec.normalise match {
       case Empty => None
-      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored
+      // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored -- should this be looking for any parser which can parse empty?
       // TODO: import postfix if not in scope
-      case _ =>
+      // TODO: report can't left factor if there are impure parsers
+      case leftRec =>
         println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
         Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).normalise)
     }
@@ -80,12 +81,8 @@ object Transformation {
         val UnfoldedProduction(pe, pn, pl) = unfold0(visited, p)
         val UnfoldedProduction(qe, qn, ql) = unfold0(visited, q)
 
-        val empty = if (pe.isDefined && qe.isDefined) {
-          // TODO: does this work as an implementation of the original bothEmpty? does it assume currying?
-          Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
-        } else {
-          None
-        }
+        val empty = if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
+                    else None
 
         val lefts = {
           val llr = pl.map(flip) <*> q
@@ -120,7 +117,25 @@ object Transformation {
         case Pure(x) => UnfoldedProduction(Some(x), Empty, Empty)
         case Empty => UnfoldedProduction(None, Empty, Empty)
 
-        case FMap(p, f) => unfold0(visited, Ap(Pure(f), p))
+        case Many(p) =>
+          val UnfoldedProduction(_, pn, pl) = unfold0(visited, p)
+
+          val lefts = pl.map {
+            val f = Var()
+            val xs = Var()
+            val nt = Var()
+
+            // \f xs nt -> f nt : xs
+            Lam(f, Lam(xs, Lam(nt, consH(App(f, nt), xs))))
+          } <*> Many(p)
+
+          val nonLefts = SomeP(pn)
+
+          UnfoldedProduction(Some(Opaque(q"Nil")), nonLefts, lefts)
+
+        case SomeP(p) => unfold0(visited, p.map(cons) <*> Many(p))
+
+        case FMap(p, f) => unfold0(visited, Pure(f) <*> p)
 
         case p: LiftLike =>
           val liftedFunc: Parser = Pure(p.func match {

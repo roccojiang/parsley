@@ -23,6 +23,8 @@ object Matchers {
   val map = SymbolMatcher.normalized("parsley.Parsley.map")
   val empty = SymbolMatcher.normalized("parsley.Parsley.empty")
   val pure = SymbolMatcher.normalized("parsley.Parsley.pure")
+  val many = SymbolMatcher.normalized("parsley.Parsley.many")
+  val some = SymbolMatcher.normalized("parsley.Parsley.some")
   val <*> = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
   val <|> = SymbolMatcher.normalized("parsley.Parsley.`|`", "parsley.Parsley.`<|>`")
 }

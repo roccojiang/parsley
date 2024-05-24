@@ -85,6 +85,11 @@ object Parser {
     val term = q"many(${p.term})"
   }
 
+  /* p: Parser[A], some(p): Parser[List[A]] */
+  final case class SomeP(p: Parser) extends Parser {
+    val term = q"some(${p.term})"
+  }
+
   /* string(s): Parser[String] */
   final case class Str(s: String) extends Parser {
     val term = q"string($s)"
@@ -119,6 +124,10 @@ object Parser {
     val term = q"${func.term}(..${parsers.map(_.term)})"
   }
 
+  final case class Named(name: String, parser: Parser) extends Parser {
+    val term = q"$name(${parser.term})"
+  }
+
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
   }
@@ -133,6 +142,12 @@ object Parser {
       Str(s)
     // "empty"
     case Matchers.empty(Term.Name(_)) => Empty
+    // "many(p)"
+    case Term.Apply.After_4_6_0(Matchers.many(_), Term.ArgClause(List(p), _)) =>
+      Many(apply(p))
+    // "some(p)"
+    case Term.Apply.After_4_6_0(Matchers.some(_), Term.ArgClause(List(p), _)) =>
+      SomeP(apply(p))
     // "pure(x)"
     case Term.Apply.After_4_6_0(Matchers.pure(_), Term.ArgClause(List(x), _)) =>
       Pure(Function.buildFuncFromTerm(x, "PURE"))
@@ -173,7 +188,9 @@ object Parser {
 
     // any other unrecognised term names will be assumed to be a non-terminal
     // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
-    case t: Term.Name => NonTerminal(t.symbol)
+    case t: Term.Name =>
+      println(s"HHSDFJHISDJKFF >>> $t matches ${SymbolMatcher.normalized("parsley").matches(t.symbol)}")
+      NonTerminal(t.symbol)
 
     // TODO: pattern match on Apply, ApplyInfix so we can still try to find parsers within the term?
     case unrecognisedTerm => Unknown(unrecognisedTerm)
@@ -186,6 +203,7 @@ object Parser {
       case Ap(p, q) => Ap(transform(p)(pf), transform(q)(pf))
       case FMap(p, f) => FMap(transform(p)(pf), f)
       case Many(p) => Many(transform(p)(pf))
+      case SomeP(p) => SomeP(transform(p)(pf))
       case Postfix(tpe, p, op) => Postfix(tpe, transform(p)(pf), transform(op)(pf))
       case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(transform(_)(pf)))
       case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(transform(_)(pf)))

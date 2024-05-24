@@ -24,9 +24,7 @@ sealed abstract class Function extends Product with Serializable {
   def normalise: Function =
     if (this.normal) this else this.reduce
 
-  def reduce: Function = {
-    println(s"SIMPLIFYING: $this")
-    this match {
+  def reduce: Function = this match {
     // Beta reduction rule
     case App(Lam(xs, f), ys @ _*) =>
       // TODO: better error handling than this
@@ -42,7 +40,7 @@ sealed abstract class Function extends Product with Serializable {
     case Opaque(t, substs) => Opaque(t, substs.map { case (x, y) => x -> y.reduce })
 
     case _ => this
-  }}
+  }
 
   private def normal: Boolean = this match {
     case App(Lam(_, _), _*) => false
@@ -134,9 +132,17 @@ object Function {
     // \f -> \g -> \x -> f (g x)
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
   }
-
   def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
+
+  def cons: Function = {
+    val x = Var() // : A
+    val xs = Var() // : List[A]
+
+    // \x -> \xs -> x :: xs
+    Lam(x, Lam(xs, App(App(Opaque(q"::"), x), xs)))
+  }
+  def consH(x: Function, xs: Function): Function = App(App(cons, x), xs)
 
   private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Function = {
     type ParameterLists = List[List[Term.Param]]
