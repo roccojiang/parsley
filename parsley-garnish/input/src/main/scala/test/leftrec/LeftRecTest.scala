@@ -14,16 +14,13 @@ object LeftRecTest {
 
   def flip[A, B, C](f: A => B => C): B => A => C = (b: B) => (a: A) => f(a)(b)
 
-  // lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
+  lazy val p: Parsley[String] = pure((xs: String) => (ba: String) => xs + ba) <*> p <*> string("ba") | string("ca")
   lazy val p2: Parsley[String] = p2.map((xs: String) => (ba: String) => xs + ba) <*> string("ba") | string("ca")
 
   val pl = pure(identity[String] _).map(((xs: String) => (ba: Int) => xs + ba).compose(_))
   val flipped = pl.map(flip(_))
 
-  // TODO: output won't compile due to missing parameter types, need to fix this
   lazy val q: Parsley[Int] = q.map((xs: Int) => (c: Char) => c.asDigit + xs) <*> digit | digit.map(_.asDigit)
-  // Correct output:
-  // lazy val q: Parsley[Int] = chain.postfix((pure((c: Char) => c.asDigit) <*> digit), (pure(identity[Int] _).map(((xs: Int) => (c: Char) => c.asDigit + xs).compose(_)).map(flip(_)) <*> digit))
 
   def add(a: String)(b: String) = a + b
 

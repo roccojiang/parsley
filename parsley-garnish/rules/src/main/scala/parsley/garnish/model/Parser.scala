@@ -6,11 +6,15 @@ import scalafix.v1._
 
 import Function._
 import parsley.garnish.implicits.TermOps
+import parsley.garnish.analysis.ParserTransformer.ParserDefinition
+import parsley.garnish.utils.TypeUtils.getParsleyType
 
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
 
   def term: Term
+
+  def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
   def normalise: Parser = this.rewrite {
     // p <|> empty == p
@@ -76,13 +80,38 @@ sealed abstract class Parser extends Product with Serializable {
 }
 
 object Parser {
+
+  case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
+  case class UnfoldedParser(empty: Option[Function], nonLeftRec: Parser, leftRec: Parser)
+
   final case class NonTerminal(val ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName) // TODO: I think this is correct, but needs checking
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
+      if (!(ctx.env contains ref)) UnfoldedParser(None, this, Empty)
+      else {
+        val tpe = getParsleyType(ref)
+        assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
+
+        if (ref == ctx.nonTerminal) {
+          UnfoldedParser(None, Empty, Pure(id))
+        } else if (ctx.visited.contains(ref)) {
+          UnfoldedParser(None, NonTerminal(ref), Empty)
+        } else {
+          ctx.env(ref).parser.unfold()(ctx.copy(visited = ctx.visited + ref), doc)
+        }
+      }
+    }
   }
 
   /* x: A, pure(x): Parser[A] */
   final case class Pure(x: Function) extends Parser {
     val term = q"pure(${x.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(Some(x), Empty, Empty)
+    }
   }
   object Pure {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.pure")
@@ -95,6 +124,10 @@ object Parser {
 
   final case object Empty extends Parser {
     val term = Term.Name("empty")
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(None, Empty, Empty)
+    }
     
     val matcher = SymbolMatcher.normalized("parsley.Parsley.empty")
 
@@ -107,6 +140,14 @@ object Parser {
   final case class Choice(p: Parser, q: Parser) extends Parser {
     // Note: for simplicity this doesn't preserve the original combinator choice (i.e. <|> or |)
     val term = q"${p.term} | ${q.term}"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val UnfoldedParser(pe, pn, pl) = p.unfold()
+      val UnfoldedParser(qe, qn, ql) = q.unfold()
+
+      // TODO: originally in the paper this was pe.xor(qe), but I think that's not true under PEG semantics?
+      UnfoldedParser(pe.orElse(qe), pn <|> qn, pl <|> ql)
+    }
   }
   object Choice {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.`|`", "parsley.Parsley.`<|>`")
@@ -120,6 +161,39 @@ object Parser {
   /* p: Parser[A => B], q: Parser[A], p <*> q: Parser[B] */
   final case class Ap(p: Parser, q: Parser) extends Parser {
     val term = q"${p.term} <*> ${q.term}"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val UnfoldedParser(pe, pn, pl) = p.unfold()
+      val UnfoldedParser(qe, qn, ql) = q.unfold()
+
+      val empty =
+        if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
+        else None
+
+      val lefts = {
+        val llr = pl.map(flip) <*> q
+        val rlr = pe match {
+          case None => Empty
+          case Some(f) => {
+            ql.map(composeH(f))
+          }
+        }
+
+        llr <|> rlr
+      }
+
+      val nonLefts = {
+        val lnl = pn <*> q
+        val rnl = pe match {
+          case None => Empty
+          case Some(f) => qn.map(f)
+        }
+
+        lnl <|> rnl
+      }
+
+      UnfoldedParser(empty, nonLefts, lefts)
+    }
   }
   object Ap {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
@@ -133,6 +207,10 @@ object Parser {
   /* p: Parser[A], f: Func[A => B], p.map(f): Parser[B] */
   final case class FMap(p: Parser, f: Function) extends Parser {
     val term = q"${p.term}.map(${f.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      (Pure(f) <*> p).unfold()
+    }
   }
   object FMap {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.map")
@@ -146,6 +224,23 @@ object Parser {
   /* p: Parser[A], many(p): Parser[List[A]] */
   final case class Many(p: Parser) extends Parser {
     val term = q"many(${p.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val UnfoldedParser(_, pn, pl) = p.unfold()
+
+      val lefts = pl.map {
+        val f = Var()
+        val xs = Var()
+        val nt = Var()
+
+        // \f xs nt -> f nt : xs
+        Lam(f, Lam(xs, Lam(nt, consH(App(f, nt), xs))))
+      } <*> Many(p)
+
+      val nonLefts = SomeP(pn)
+
+      UnfoldedParser(Some(Opaque(q"Nil")), nonLefts, lefts)
+    }
   }
   object Many {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.many")
@@ -159,6 +254,10 @@ object Parser {
   /* p: Parser[A], some(p): Parser[List[A]] */
   final case class SomeP(p: Parser) extends Parser {
     val term = q"some(${p.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      (p.map(cons) <*> Many(p)).unfold()
+    }
   }
   object SomeP {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.some")
@@ -172,6 +271,10 @@ object Parser {
   /* string(s): Parser[String] */
   final case class Str(s: String, implicitSyntax: Boolean = false) extends Parser {
     val term = if (implicitSyntax) Lit.String(s) else q"string($s)"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(None, this, Empty)
+    }
   }
   object Str {
     val stringLiftMatcher = SymbolMatcher.normalized("parsley.syntax.character.stringLift")
@@ -190,12 +293,26 @@ object Parser {
   /* p: Parser[A], op: Parser[A => A], p postfix op: Parser[A] */
   final case class Postfix(tpe: Type.Name, p: Parser, op: Parser) extends Parser {
     val term = q"chain.postfix[$tpe](${p.term})(${op.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(None, this, Empty) // TODO: actually implement properly
+    }
   }
 
   /* f: (T1, T2, ..., TN) => R, pN: Parser[TN], f.lift(ps) : Parser[R] */
   sealed trait LiftLike extends Parser {
     def func: Function
     def parsers: List[Parser]
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val liftedFunc: Parser = Pure(func match {
+        case Opaque(f @ Term.Name(_), substs) if parsers.size > 1 => Opaque(q"$f.curried", substs)
+        case _ => func
+      })
+      val curried = parsers.foldLeft(liftedFunc)(_ <*> _)
+
+      curried.unfold()
+    }
   }
 
   final case class LiftImplicit(func: Function, parsers: List[Parser]) extends LiftLike {
@@ -262,16 +379,25 @@ object Parser {
           case SelectTree(_, IdTree(symInfo)) => matcher.matches(symInfo.symbol)
       }) =>
         val func = Function.buildFuncFromTerm(fun, "BRIDGE")
-        Bridge(func, ps.map(_.toParser)) // TODO: I haven't unpacked the ArgClause here and directly mapped, does this work?
+        Bridge(func, ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
   }
 
+  // TODO: remove this placeholder parser
   final case class Named(name: String, parser: Parser) extends Parser {
     val term = q"$name(${parser.term})"
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(None, this, Empty)
+    }
   }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
+
+    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      UnfoldedParser(None, this, Empty)
+    }
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
