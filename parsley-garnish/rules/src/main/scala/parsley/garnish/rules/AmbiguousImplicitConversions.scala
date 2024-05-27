@@ -75,14 +75,13 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
 
   case class AmbiguousImplicitConversionsLint(tree: Tree, imports: Seq[Import]) extends Diagnostic {
     override def position: Position = tree.pos
-    override def severity: LintSeverity = LintSeverity.Error
+    override def severity: LintSeverity = LintSeverity.Warning
     override def message: String =
-      s"""This import may cause multiple, clashing implicit conversions:
+      s"""This import may cause clashing implicit conversions:
          |* ${imports.map(printImport).mkString("\n* ")}
-         |If this is the case, you may encounter confusing errors like 'value/method is not a member of String/Char'.
+         |If this is the case, you may encounter confusing errors like 'method is not a member of String'.
          |To fix this, ensure that you only import a single implicit conversion.
        """.stripMargin
-      // TODO: add a canonical link to the wiki page? e.g. For more information, see: https://j-mie6.github.io/parsley/5.0/api-guide/syntax.html.
     
     private def printImport(importStat: Import): String =
       s"${importStat} at line ${importStat.pos.startLine + 1}"
