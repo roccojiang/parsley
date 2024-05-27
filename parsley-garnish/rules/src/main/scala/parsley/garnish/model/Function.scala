@@ -2,7 +2,6 @@ package parsley.garnish.model
 
 import scala.collection.mutable
 import scala.meta._
-import scala.meta.contrib._
 import scalafix.v1._
 
 sealed abstract class Function extends Product with Serializable {
@@ -12,11 +11,11 @@ sealed abstract class Function extends Product with Serializable {
 
   // Barendregt's convention is enforced
   def substitute(x: Var, y: Function): Function = this match {
-    case Var(name, _) if name.isEqual(x.name) => y
+    case Var(name, _) if name == x.name => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
-    case Opaque(t, substs) =>
-      Opaque(t, substs.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name.value -> y))
+    case Opaque(t, env) =>
+      Opaque(t, env.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name -> y))
     case _ => this
   }
 
@@ -53,12 +52,18 @@ sealed abstract class Function extends Product with Serializable {
 
   def reflect: HOAS = {
     def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
-      case v: Var => boundVars.getOrElse(v, HOAS.Opaque(v.name))
+      case v: Var => boundVars.getOrElse(v, HOAS.Opaque(v.term))
       case Lam(xs, f) => HOAS.Abs(vs => {
-        println(s"REFLECTING LAM ${xs.zip(vs)}")
+        // TODO: ACTUALLY IT MIGHT BE BECAUSE VARS ARE NOT BEING HASHED CORRECTLY
+        println(s"REFLECTING LAM with new ${xs.zip(vs)} = boundvars ${boundVars ++ xs.zip(vs)}")
         reflect0(f, boundVars ++ xs.zip(vs))
       })
-      case App(f, xs @ _*) => HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
+      case App(f, xs @ _*) => {
+        // TODO: SOMETHING WRONG HAPPENS HERE, maybe boundVars not getting threaded through xs correctly
+        val r = HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
+        println(s"REFLECTED APP $func to $r\n\tboundvars = $boundVars")
+        r
+      }
       case Opaque(term, env) => HOAS.Opaque(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
     }
     
@@ -71,13 +76,13 @@ sealed abstract class Function extends Product with Serializable {
   override def toString: String = this match {
     case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
     case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
-    case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
+    case Var(name, tpe) => name + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
     case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
   }
 }
 
 object Function {
-  case class Opaque(originalTerm: Term, env: Map[String, Function] = Map.empty) extends Function {
+  case class Opaque(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Function {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -95,19 +100,32 @@ object Function {
     val term = transformer(originalTerm).asInstanceOf[Term]
   }
 
-  case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
-    // Enforce Barendregt's convention
-    val name = Term.fresh(prefix.getOrElse("_x"))
-    val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
+  type VarName = String
+  case class Var private (name: VarName, displayType: Option[Type]) extends Function {
+    val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else Term.Name(name)
+    val unlabelledTerm = Term.Name(name)
   }
+
   object Var {
-    def unapply(v: Var): Option[(Term.Name, Option[Type])] = Some((v.name, v.displayType))
+    def apply(prefix: Option[String] = None, displayType: Option[Type] = None): Var = {
+      val name = Term.fresh(prefix.getOrElse("_x"))
+      new Var(name.syntax, displayType)
+    }
   }
+
+  // case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
+  //   // Enforce Barendregt's convention
+  //   val name = Term.fresh(prefix.getOrElse("_x"))
+  //   val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
+  // }
+  // object Var {
+  //   def unapply(v: Var): Option[(Term.Name, Option[Type])] = Some((v.name, v.displayType))
+  // }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
   case class Lam(xs: List[Var], f: Function) extends Function {
     val term = {
-      val params = xs.map(x => Term.Param(List.empty, x.name, x.displayType, None))
+      val params = xs.map(x => Term.Param(List.empty, Term.Name(x.name), x.displayType, None))
 
       f match {
         // TODO: this breaks things for a few edge cases, so disabled for now
@@ -189,7 +207,7 @@ object Function {
     // Substitute the fresh variables into the function body
     // Comparison using symbols negates scoping problems
     val updatedBody = body.transform {
-      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).name
+      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).unlabelledTerm
     }.asInstanceOf[Term]
 
     val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
@@ -209,11 +227,11 @@ object Function {
       case Term.Ascribe(Term.Placeholder(), tpe) =>
         val namedParam = Var(Some("_p"), Some(tpe))
         namedParams += namedParam
-        namedParam.name
+        namedParam.unlabelledTerm
       case _: Term.Placeholder =>
         val namedParam = Var(Some("_p"), None)
         namedParams += namedParam
-        namedParam.name
+        namedParam.unlabelledTerm
     }.asInstanceOf[Term]
 
     val defaultMap = namedParams.map(v => v.name.toString -> v).toMap

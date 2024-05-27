@@ -2,6 +2,8 @@ package parsley.garnish.model
 
 import scala.meta._
 
+import Function.VarName
+
 sealed abstract class HOAS extends Product with Serializable {
   import HOAS._
 
@@ -35,9 +37,12 @@ sealed abstract class HOAS extends Product with Serializable {
     val reified = this match {
       case Abs(n, f) => {
         val params = (1 to n).map(_ => Function.Var(Some("hoas"))).toList
-        Function.Lam(params, f(params.map(x => HOAS.Opaque(x.name))).reify) // TODO: something wrong here?
+        Function.Lam(params, f(params.map(x => HOAS.Opaque(x.term))).reify)
       }
-      case App(f, xs) => Function.App(f.reify, xs.map(_.reify): _*)
+      case App(f, xs) => {
+        println(s"REIFYING APP $f $xs")
+        Function.App(f.reify, xs.map(_.reify): _*)
+      }
       case Opaque(t, env) => Function.Opaque(t, env.map { case (v, f) => v -> f.reify })
     }
     // println(s"REIFIED $this to $reified")
@@ -64,7 +69,7 @@ object HOAS {
 
   // case class Tuple(xs: Seq[HOAS]) extends HOAS
 
-  case class Opaque(t: Term, env: Map[String, HOAS] = Map.empty) extends HOAS
+  case class Opaque(t: Term, env: Map[VarName, HOAS] = Map.empty) extends HOAS
 
   // def appC(f: HOAS, xs: HOAS*): HOAS = xs.foldLeft(f)(App(_, _))
   def appC(f: HOAS, xs: HOAS*): HOAS = xs.foldLeft(f)((acc, x) => App(acc, Seq(x)))
