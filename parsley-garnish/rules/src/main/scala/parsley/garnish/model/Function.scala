@@ -20,9 +20,11 @@ sealed abstract class Function extends Product with Serializable {
     case _ => this
   }
 
+  def normalise: Function = this.reflect.normalise.reify
+
   // TODO: figure out the correct reduction/normalisation strategy
-  def normalise: Function =
-    if (this.normal) this else this.reduce
+  // def normalise: Function =
+  //   if (this.normal) this else this.reduce
 
   def reduce: Function = this match {
     // Beta reduction rule
@@ -50,38 +52,47 @@ sealed abstract class Function extends Product with Serializable {
   }
 
   def reflect: HOAS = {
-    def reflect0(func: Function, env: Map[Var, HOAS]): HOAS = func match {
-      case v: Var => env.getOrElse(v, HOAS.Var(v.name))
-      // TODO: each HOAS binder needs to be named so I can substitute them back in for the Opaque case :(
+    def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
+      case v: Var => boundVars.getOrElse(v, HOAS.Opaque(v.name))
       case Lam(xs, f) => HOAS.Abs(vs => {
-        reflect0(f, env ++ xs.zip(vs))
+        println(s"REFLECTING LAM ${xs.zip(vs)}")
+        reflect0(f, boundVars ++ xs.zip(vs))
       })
-
+      case App(f, xs @ _*) => HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
+      case Opaque(term, env) => HOAS.Opaque(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
     }
-
-    reflect0(this, Map.empty)
+    
+    val reflected = reflect0(this, Map.empty)
+    println(s"REFLECTED $this to ${reflected.reify}")
+    reflected
   }
 
-  override def toString: String = term.syntax
-  // override def toString: String = this match {
-  //   case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
-  //   case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
-  //   case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
-  //   case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
-  // }
+  // override def toString: String = term.syntax
+  override def toString: String = this match {
+    case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
+    case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
+    case Var(name, tpe) => name.syntax + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
+    case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
+  }
 }
 
 object Function {
-  case class Opaque(t: Term, substs: Map[String, Function] = Map.empty) extends Function {
-    val term = t.transform {
-      case name: Term.Name =>
-        // Must compare structurally, still cannot use referential equality in this case
-        // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
-        substs.get(name.value) match {
-          case Some(y) => y.term
-          case None => name
-        }
-    }.asInstanceOf[Term]
+  case class Opaque(originalTerm: Term, env: Map[String, Function] = Map.empty) extends Function {
+    private val transformer = new Transformer {
+      override def apply(tree: Tree): Tree = tree match {
+        case name: Term.Name =>
+          // Must compare structurally, still cannot use referential equality in this case
+          // Tree.transform might be performing a copy of the parameter terms, so they aren't the same object any more
+          env.get(name.value) match {
+            case Some(y) => y.term
+            case None => name
+          }
+
+        case node => super.apply(node)
+      }
+    }
+
+    val term = transformer(originalTerm).asInstanceOf[Term]
   }
 
   case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
@@ -181,7 +192,13 @@ object Function {
       case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).name
     }.asInstanceOf[Term]
 
-    freshParams.foldRight[Function](Opaque(updatedBody)) { (params, acc) => Lam(params, acc) }
+    val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
+    println(s"FRESH_PARAMS for $updatedBody: $defaultMap")
+
+    val opaque = Opaque(updatedBody, defaultMap)
+    println(s"BUILT OPAQUE: $opaque")
+
+    freshParams.foldRight[Function](Opaque(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
   }
 
   private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
@@ -199,11 +216,16 @@ object Function {
         namedParam.name
     }.asInstanceOf[Term]
 
-    namedParams.toList.foldRight[Function](Opaque(transformedFunc)) { (param, acc) => Lam(param, acc) }
+    val defaultMap = namedParams.map(v => v.name.toString -> v).toMap
+    println(s"NAMED_PARAMS: $defaultMap")
+
+    namedParams.toList.foldRight[Function](Opaque(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
   }
 
   def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
     parsley.garnish.utils.printInfo(f, debugName)
+
+    println(s"BUILDING FUNCTION FROM TERM: $f")
 
     val func = f match {
       // * Lambda - look at parameter lists

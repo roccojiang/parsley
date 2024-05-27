@@ -1,45 +1,57 @@
 package parsley.garnish.model
 
 import scala.meta._
-import scalafix.v1._
 
 sealed abstract class HOAS extends Product with Serializable {
   import HOAS._
 
-  def normalise: HOAS = this match {
-    case Abs(f) => Abs(x => f(x).normalise)
-    case App(f, x) => f.whnf match {
-      case Abs(g) => g(x).normalise
-      case g      => App(g.normalise, x.map(_.normalise))
-      // case g      => App(g.normalise, x.normalise.asInstanceOf[Tuple]) // TODO: ew, but this should be guaranteed
+  def normalise: HOAS = {
+    println(s"NORMALISING ${this.reify}")
+    val normalised = this match {
+      case Abs(_, f) => Abs(x => f(x).normalise)
+      case App(f, x) => f.whnf match {
+        case Abs(_, g) => g(x).normalise
+        case g      => App(g.normalise, x.map(_.normalise))
+        // case g      => App(g.normalise, x.normalise.asInstanceOf[Tuple]) // TODO: ew, but this should be guaranteed
+      }
+      // case Tuple(xs) => Tuple(xs.map(_.normalise))
+      case Opaque(t, env) => Opaque(t, env.map { case (k, v) => k -> v.normalise })
+      case _ => this
     }
-    // case Tuple(xs) => Tuple(xs.map(_.normalise))
-    case Opaque(t, env) => Opaque(t, env.map { case (k, v) => k -> v.normalise })
-    case _ => this
+    println(s"\tNORMALISED ${this.reify} to ${normalised.reify}")
+    normalised
   }
 
   private def whnf: HOAS = this match {
     case App(f, x) => f.whnf match {
-      case Abs(g) => g(x).whnf
+      case Abs(_, g) => g(x).whnf
       case g      => App(g, x)
     }
     case Opaque(t, env) => Opaque(t, env.map { case (k, v) => k -> v.whnf })
     case _ => this
   }
 
-  def reify: Term = this match {
-    // case Abs(f) => Function.Lam(Seq.empty, f(Var(Term.Name("x"))).reify)
-    // case App(f, x) => Function.App(f.reify, x.reify)
-    // case Opaque(t, env) => Function.Opaque(t, env.map { case (k, v) => k -> v.reify })
-    // case Var(name) => Function.Var(name)
-    case _ => ???
+  def reify: Function = {
+    val reified = this match {
+      case Abs(n, f) => {
+        val params = (1 to n).map(_ => Function.Var(Some("hoas"))).toList
+        Function.Lam(params, f(params.map(x => HOAS.Opaque(x.name))).reify) // TODO: something wrong here?
+      }
+      case App(f, xs) => Function.App(f.reify, xs.map(_.reify): _*)
+      case Opaque(t, env) => Function.Opaque(t, env.map { case (v, f) => v -> f.reify })
+    }
+    // println(s"REIFIED $this to $reified")
+    reified
   }
 }
 
 object HOAS {
-  case class Abs(f: Seq[HOAS] => HOAS) extends HOAS
+  case class Abs(n: Int, f: Seq[HOAS] => HOAS) extends HOAS
+  object Abs {
+    def apply(f: Seq[HOAS] => HOAS): Abs = Abs(1, f)
+  }
 
-  case class App(f: HOAS, xs: Seq[HOAS]) extends HOAS
+  case class App private (f: HOAS, xs: Seq[HOAS]) extends HOAS
   object App {
     def apply(f: Seq[HOAS], xs: Seq[HOAS]): App = {
       assert(f.size == 1) // TODO: ew
@@ -48,7 +60,7 @@ object HOAS {
   }
 
   // TODO: this is a specialisation of Opaque (for 'unknowns'), I guess, so is this required?
-  case class Var(name: Term.Name) extends HOAS
+  // case class Var(name: Term.Name) extends HOAS
 
   // case class Tuple(xs: Seq[HOAS]) extends HOAS
 
