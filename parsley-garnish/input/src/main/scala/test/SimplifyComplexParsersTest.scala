@@ -18,7 +18,7 @@ object SimplifyComplexParsersTest {
 
     val apRightAbsorb = empty <*> optional("fennel")
     val apHomomorphism = pure((x: Int) => x + 1) <*> pure(1)
-    val fmap = pure((s: String) => s + "thyme") <*> "rosemary"
+    val fmap = pure((s: String) => s + "thyme") <*> "rosemary" // TODO: this doesn't compile
 
     val fmapLeftAbsorb = empty.map(s => add(s, "sage"))
 

@@ -49,6 +49,19 @@ sealed abstract class Function extends Product with Serializable {
     case _ => true
   }
 
+  def reflect: HOAS = {
+    def reflect0(func: Function, env: Map[Var, HOAS]): HOAS = func match {
+      case v: Var => env.getOrElse(v, HOAS.Var(v.name))
+      // TODO: each HOAS binder needs to be named so I can substitute them back in for the Opaque case :(
+      case Lam(xs, f) => HOAS.Abs(vs => {
+        reflect0(f, env ++ xs.zip(vs))
+      })
+
+    }
+
+    reflect0(this, Map.empty)
+  }
+
   override def toString: String = term.syntax
   // override def toString: String = this match {
   //   case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
