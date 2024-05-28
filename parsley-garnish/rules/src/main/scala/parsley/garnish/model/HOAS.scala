@@ -10,7 +10,7 @@ sealed abstract class HOAS extends Product with Serializable {
   def normalise: HOAS = {
     // println(s"NORMALISING ${this.reify}")
     val normalised = this match {
-      case Abs(_, f) => Abs(x => f(x).normalise)
+      case Abs(n, f) => Abs(n, x => f(x).normalise)
       case App(f, x) => f.whnf match {
         case Abs(_, g) => g(x).normalise
         case g      => App(g.normalise, x.map(_.normalise))
@@ -36,6 +36,7 @@ sealed abstract class HOAS extends Product with Serializable {
   def reify: Function = {
     val reified = this match {
       case Abs(n, f) => {
+        println(s"REIFYING ABS $n $f")
         val params = (1 to n).map(_ => Function.Var(Some("hoas"))).toList
         Function.Lam(params, f(params.map(x => HOAS.Var(x.name, None))).reify)
       }

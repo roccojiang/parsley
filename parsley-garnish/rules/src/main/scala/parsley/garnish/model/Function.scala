@@ -22,7 +22,7 @@ sealed abstract class Function extends Product with Serializable {
   def normalise: Function = {
     println(s"1) NORMALISING $this")
     val reflected = this.reflect
-    println(s"2) REFLECTED TO ${reflected.reify}")
+    println(s"2) REFLECTED TO ${reflected}")
     val normalised = reflected.normalise
     println(s"3) NORMALISED TO $normalised")
     val reified = normalised.reify
@@ -63,7 +63,7 @@ sealed abstract class Function extends Product with Serializable {
   def reflect: HOAS = {
     def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
       case v @ Var(name, displayType) => boundVars.getOrElse(v, HOAS.Var(name, displayType))
-      case Lam(xs, f) => HOAS.Abs(vs => {
+      case Lam(xs, f) => HOAS.Abs(xs.size, vs => {
         // TODO: ACTUALLY IT MIGHT BE BECAUSE VARS ARE NOT BEING HASHED CORRECTLY
         // println(s"REFLECTING LAM with new ${xs.zip(vs)} = boundvars ${boundVars ++ xs.zip(vs)}")
         reflect0(f, boundVars ++ xs.zip(vs))
