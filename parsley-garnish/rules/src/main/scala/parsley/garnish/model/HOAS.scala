@@ -8,7 +8,7 @@ sealed abstract class HOAS extends Product with Serializable {
   import HOAS._
 
   def normalise: HOAS = {
-    println(s"NORMALISING ${this.reify}")
+    // println(s"NORMALISING ${this.reify}")
     val normalised = this match {
       case Abs(_, f) => Abs(x => f(x).normalise)
       case App(f, x) => f.whnf match {
@@ -20,7 +20,7 @@ sealed abstract class HOAS extends Product with Serializable {
       case Opaque(t, env) => Opaque(t, env.map { case (k, v) => k -> v.normalise })
       case _ => this
     }
-    println(s"\tNORMALISED ${this.reify} to ${normalised.reify}")
+    // println(s"\tNORMALISED ${this.reify} to ${normalised.reify}")
     normalised
   }
 
@@ -37,13 +37,14 @@ sealed abstract class HOAS extends Product with Serializable {
     val reified = this match {
       case Abs(n, f) => {
         val params = (1 to n).map(_ => Function.Var(Some("hoas"))).toList
-        Function.Lam(params, f(params.map(x => HOAS.Opaque(x.term))).reify)
+        Function.Lam(params, f(params.map(x => HOAS.Var(x.name, None))).reify)
       }
       case App(f, xs) => {
-        println(s"REIFYING APP $f $xs")
+        // println(s"REIFYING APP $f $xs")
         Function.App(f.reify, xs.map(_.reify): _*)
       }
       case Opaque(t, env) => Function.Opaque(t, env.map { case (v, f) => v -> f.reify })
+      case Var(name, displayType) => Function.Var(name, displayType)
     }
     // println(s"REIFIED $this to $reified")
     reified
@@ -65,7 +66,7 @@ object HOAS {
   }
 
   // TODO: this is a specialisation of Opaque (for 'unknowns'), I guess, so is this required?
-  // case class Var(name: Term.Name) extends HOAS
+  case class Var(name: VarName, displayType: Option[Type]) extends HOAS
 
   // case class Tuple(xs: Seq[HOAS]) extends HOAS
 

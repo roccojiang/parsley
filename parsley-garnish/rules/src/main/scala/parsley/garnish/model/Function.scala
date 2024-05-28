@@ -19,7 +19,17 @@ sealed abstract class Function extends Product with Serializable {
     case _ => this
   }
 
-  def normalise: Function = this.reflect.normalise.reify
+  def normalise: Function = {
+    println(s"1) NORMALISING $this")
+    val reflected = this.reflect
+    println(s"2) REFLECTED TO ${reflected.reify}")
+    val normalised = reflected.normalise
+    println(s"3) NORMALISED TO $normalised")
+    val reified = normalised.reify
+    println(s"4) REIFIED TO $reified")
+    reified
+    // this.reflect.normalise.reify
+  }
 
   // TODO: figure out the correct reduction/normalisation strategy
   // def normalise: Function =
@@ -52,33 +62,33 @@ sealed abstract class Function extends Product with Serializable {
 
   def reflect: HOAS = {
     def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
-      case v: Var => boundVars.getOrElse(v, HOAS.Opaque(v.term))
+      case v @ Var(name, displayType) => boundVars.getOrElse(v, HOAS.Var(name, displayType))
       case Lam(xs, f) => HOAS.Abs(vs => {
         // TODO: ACTUALLY IT MIGHT BE BECAUSE VARS ARE NOT BEING HASHED CORRECTLY
-        println(s"REFLECTING LAM with new ${xs.zip(vs)} = boundvars ${boundVars ++ xs.zip(vs)}")
+        // println(s"REFLECTING LAM with new ${xs.zip(vs)} = boundvars ${boundVars ++ xs.zip(vs)}")
         reflect0(f, boundVars ++ xs.zip(vs))
       })
       case App(f, xs @ _*) => {
         // TODO: SOMETHING WRONG HAPPENS HERE, maybe boundVars not getting threaded through xs correctly
         val r = HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
-        println(s"REFLECTED APP $func to $r\n\tboundvars = $boundVars")
+        // println(s"REFLECTED APP $func to $r\n\tboundvars = $boundVars")
         r
       }
       case Opaque(term, env) => HOAS.Opaque(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
     }
     
     val reflected = reflect0(this, Map.empty)
-    println(s"REFLECTED $this to ${reflected.reify}")
+    // println(s"REFLECTED $this to ${reflected.reify}")
     reflected
   }
 
   // override def toString: String = term.syntax
-  override def toString: String = this match {
-    case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
-    case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
-    case Var(name, tpe) => name + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
-    case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
-  }
+  // override def toString: String = this match {
+  //   case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
+  //   case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
+  //   case Var(name, tpe) => name + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
+  //   case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
+  // }
 }
 
 object Function {
@@ -101,7 +111,7 @@ object Function {
   }
 
   type VarName = String
-  case class Var private (name: VarName, displayType: Option[Type]) extends Function {
+  case class Var(name: VarName, displayType: Option[Type]) extends Function {
     val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else Term.Name(name)
     val unlabelledTerm = Term.Name(name)
   }
