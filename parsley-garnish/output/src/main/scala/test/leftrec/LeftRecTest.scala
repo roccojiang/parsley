@@ -12,13 +12,11 @@ object LeftRecTest {
   // TODO: for certain examples like this one with lambdas (or if we can find the function definition to inline?), is it possible to evaluate the flip at compile time?
   // TODO: same thing with if we see pure(identity) as well
   // lazy val p: Parsley[String] = chain.postfix(string("ca"))(pure(identity[String] _).map(((xs: String) => (ba: String) => xs + ba).compose(_)).map(flip(_)) <*> string("ba"))
-  lazy val p: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh28 => fresh29 => ((xs: String) => (ba: String) => xs + ba)(fresh29)(fresh28)))
-  // lazy val p2: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh18 => (fresh10 => fresh10)(_) + fresh18))
-  lazy val p2: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(fresh11 => (fresh3 => fresh3)(_) + fresh11))
+  lazy val p: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(_x20 => _x21 => _x21 + _x20))
+  lazy val p2: Parsley[String] = chain.postfix[String](string("ca"))(string("ba").map(_x18 => _x19 => _x19 + _x18))
 
-  // TODO: output won't compile due to missing parameter types, need to fix this
-  lazy val q: Parsley[Int] = q.map((xs: Int) => (c: Char) => c.asDigit + xs) <*> digit | digit.map(_.asDigit)
-  // Correct output:
+  lazy val q: Parsley[Int] = chain.postfix[Int](digit.map(_p7 => _p7.asDigit))(digit.map(_x33 => _x34 => _x33.asDigit + _x34))
+  // Complete: output used to not compile due to missing parameter types
   // lazy val q: Parsley[Int] = chain.postfix((pure((c: Char) => c.asDigit) <*> digit), (pure(identity[Int] _).map(((xs: Int) => (c: Char) => c.asDigit + xs).compose(_)).map(flip(_)) <*> digit))
 
   def add(a: String)(b: String) = a + b

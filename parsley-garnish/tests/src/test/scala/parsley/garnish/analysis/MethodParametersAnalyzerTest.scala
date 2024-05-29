@@ -12,8 +12,6 @@ import scala.reflect.ClassTag
 
 import MethodParametersAnalyzer._
 
-import parsley.garnish.model.Function._
-
 class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
   implicit def termEq[T <: Term : ClassTag] = new Equality[T] {
     def areEqual(a: T, b: Any): Boolean = b match {
