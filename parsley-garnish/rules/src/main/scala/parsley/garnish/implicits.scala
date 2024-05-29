@@ -15,7 +15,7 @@ object implicits {
   }
 
   implicit class TermOps(private val term: Term) extends AnyVal {
-    import parsley.garnish.model.Parser, Parser._
+    import model.Parser, Parser._
 
     def toParser(implicit doc: SemanticDocument): Parser = {
       val transforms: PartialFunction[Term, Parser] = Seq(

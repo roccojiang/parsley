@@ -9,36 +9,50 @@ sealed abstract class Function extends Product with Serializable {
 
   def term: Term
 
+  def normalise: Function = this.reflect.normalise.reify
+  // {
+  //   println(s"1) NORMALISING $this")
+  //   val reflected = this.reflect
+  //   println(s"2) REFLECTED TO ${reflected}")
+  //   val normalised = reflected.normalise
+  //   println(s"3) NORMALISED TO $normalised")
+  //   val reified = normalised.reify
+  //   println(s"4) REIFIED TO $reified")
+  //   reified
+  // }
+
+  private def reflect: HOAS = {
+    def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
+      case v @ Var(name, displayType) =>
+        boundVars.getOrElse(v, HOAS.Var(name, displayType))
+      case Lam(xs, f) =>
+        HOAS.Abs(xs.size, vs => reflect0(f, boundVars ++ xs.zip(vs)))
+      case App(f, xs @ _*) =>
+        HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
+      case Translucent(term, env) =>
+        HOAS.Translucent(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
+    }
+   
+    reflect0(this, Map.empty)
+  }
+
+  // TODO: remove this - old normalisation by substitution approach
+  /*
+  def normalise: Function = if (this.normal) this else this.reduce
+
   // Barendregt's convention is enforced
   def substitute(x: Var, y: Function): Function = this match {
     case Var(name, _) if name == x.name => y
     case Lam(xs, f) => Lam(xs, f.substitute(x, y))
     case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
-    case Opaque(t, env) =>
-      Opaque(t, env.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name -> y))
+    case Translucent(t, env) =>
+      Translucent(t, env.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name -> y))
     case _ => this
   }
-
-  def normalise: Function = {
-    println(s"1) NORMALISING $this")
-    val reflected = this.reflect
-    println(s"2) REFLECTED TO ${reflected}")
-    val normalised = reflected.normalise
-    println(s"3) NORMALISED TO $normalised")
-    val reified = normalised.reify
-    println(s"4) REIFIED TO $reified")
-    reified
-    // this.reflect.normalise.reify
-  }
-
-  // TODO: figure out the correct reduction/normalisation strategy
-  // def normalise: Function =
-  //   if (this.normal) this else this.reduce
 
   def reduce: Function = this match {
     // Beta reduction rule
     case App(Lam(xs, f), ys @ _*) =>
-      // TODO: better error handling than this
       assert(xs.length == ys.length, "Incorrect number of arguments")
       xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
 
@@ -48,7 +62,7 @@ sealed abstract class Function extends Product with Serializable {
     }
     case Lam(xs, f) => Lam(xs, f.reduce)
 
-    case Opaque(t, substs) => Opaque(t, substs.map { case (x, y) => x -> y.reduce })
+    case Translucent(t, substs) => Translucent(t, substs.map { case (x, y) => x -> y.reduce })
 
     case _ => this
   }
@@ -56,31 +70,10 @@ sealed abstract class Function extends Product with Serializable {
   private def normal: Boolean = this match {
     case App(Lam(_, _), _*) => false
     case App(f, xs @ _*) => f.normal && xs.forall(_.normal)
-    case Opaque(_, substs) => substs.values.forall(_.normal)
+    case Translucent(_, substs) => substs.values.forall(_.normal)
     case _ => true
   }
-
-  def reflect: HOAS = {
-    def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
-      case v @ Var(name, displayType) => boundVars.getOrElse(v, HOAS.Var(name, displayType))
-      case Lam(xs, f) => HOAS.Abs(xs.size, vs => {
-        // TODO: ACTUALLY IT MIGHT BE BECAUSE VARS ARE NOT BEING HASHED CORRECTLY
-        // println(s"REFLECTING LAM with new ${xs.zip(vs)} = boundvars ${boundVars ++ xs.zip(vs)}")
-        reflect0(f, boundVars ++ xs.zip(vs))
-      })
-      case App(f, xs @ _*) => {
-        // TODO: SOMETHING WRONG HAPPENS HERE, maybe boundVars not getting threaded through xs correctly
-        val r = HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
-        // println(s"REFLECTED APP $func to $r\n\tboundvars = $boundVars")
-        r
-      }
-      case Opaque(term, env) => HOAS.Opaque(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
-    }
-    
-    val reflected = reflect0(this, Map.empty)
-    // println(s"REFLECTED $this to ${reflected.reify}")
-    reflected
-  }
+  */
 
   // override def toString: String = term.syntax
   // override def toString: String = this match {
@@ -92,7 +85,7 @@ sealed abstract class Function extends Product with Serializable {
 }
 
 object Function {
-  case class Opaque(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Function {
+  case class Translucent(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Function {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -117,9 +110,9 @@ object Function {
   }
 
   object Var {
-    def apply(prefix: Option[String] = None, displayType: Option[Type] = None): Var = {
+    def fresh(prefix: Option[String] = None, displayType: Option[Type] = None): Var = {
       val name = Term.fresh(prefix.getOrElse("_x"))
-      new Var(name.syntax, displayType)
+      Var(name.syntax, displayType)
     }
   }
 
@@ -161,15 +154,15 @@ object Function {
 
   /* id : A => A */
   def id: Function = {
-    val x = Var() // : A
+    val x = Var.fresh() // : A
     Lam(x, x)
   }
 
   /* flip : (A => B => C) => B => A => C */
   def flip: Function = {
-    val f = Var() // : A => B => C
-    val x = Var() // : B
-    val y = Var() // : A
+    val f = Var.fresh() // : A => B => C
+    val x = Var.fresh() // : B
+    val y = Var.fresh() // : A
 
     // \f -> \x -> \y -> f y x
     Lam(f, Lam(x, Lam(y, App(App(f, y), x))))
@@ -177,9 +170,9 @@ object Function {
 
   /* compose : (B => C) => (A => B) => A => C */
   def compose: Function = {
-    val f = Var() // : B => C
-    val g = Var() // : A => B
-    val x = Var() // : A
+    val f = Var.fresh() // : B => C
+    val g = Var.fresh() // : A => B
+    val x = Var.fresh() // : A
 
     // \f -> \g -> \x -> f (g x)
     Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
@@ -188,11 +181,11 @@ object Function {
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
 
   def cons: Function = {
-    val x = Var() // : A
-    val xs = Var() // : List[A]
+    val x = Var.fresh() // : A
+    val xs = Var.fresh() // : List[A]
 
     // \x -> \xs -> x :: xs
-    Lam(x, Lam(xs, App(App(Opaque(q"::"), x), xs)))
+    Lam(x, Lam(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
   }
   def consH(x: Function, xs: Function): Function = App(App(cons, x), xs)
 
@@ -209,7 +202,7 @@ object Function {
 
     // Replace each method parameter with a fresh variable to preserve Barendregt's convention
     val freshReplacements = reversedParamLists.reverse.map(_.collect {
-      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var(Some("_l"), decltpe)
+      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var.fresh(Some("_l"), decltpe)
     })
     val freshParams = freshReplacements.map(_.map(_._2))
     val symbolsMap = freshReplacements.flatten.toMap
@@ -223,10 +216,10 @@ object Function {
     val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
     println(s"FRESH_PARAMS for $updatedBody: $defaultMap")
 
-    val opaque = Opaque(updatedBody, defaultMap)
+    val opaque = Translucent(updatedBody, defaultMap)
     println(s"BUILT OPAQUE: $opaque")
 
-    freshParams.foldRight[Function](Opaque(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
+    freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
   }
 
   private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
@@ -235,11 +228,11 @@ object Function {
     // This assumes an in-order traversal, although I'm not aware if this is guaranteed
     val transformedFunc = func.transform {
       case Term.Ascribe(Term.Placeholder(), tpe) =>
-        val namedParam = Var(Some("_p"), Some(tpe))
+        val namedParam = Var.fresh(Some("_p"), Some(tpe))
         namedParams += namedParam
         namedParam.unlabelledTerm
       case _: Term.Placeholder =>
-        val namedParam = Var(Some("_p"), None)
+        val namedParam = Var.fresh(Some("_p"), None)
         namedParams += namedParam
         namedParam.unlabelledTerm
     }.asInstanceOf[Term]
@@ -247,7 +240,7 @@ object Function {
     val defaultMap = namedParams.map(v => v.name.toString -> v).toMap
     println(s"NAMED_PARAMS: $defaultMap")
 
-    namedParams.toList.foldRight[Function](Opaque(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
+    namedParams.toList.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
   }
 
   def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
@@ -262,7 +255,7 @@ object Function {
       case func: Term.AnonymousFunction => buildFromAnonFunctionTerm(func)
       // * Otherwise - just treat as opaque
       // This should be fine? We'll just do function application like func(arg1)(arg2) without being able to substitute
-      case _ => Opaque(f)
+      case _ => Translucent(f)
     }
 
     println(s"\t RESULTFUNC: $func")

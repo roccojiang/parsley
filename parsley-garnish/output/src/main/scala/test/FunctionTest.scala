@@ -41,15 +41,15 @@ object FunctionTest {
   // val mapValFunc = pure("parsley").map(valFunc.curried)
 
   // TODO: named functions - this is just a Term.Name("func_name"), with symbols
-  // val mapValFunc = pure("parsley").map(valFuncCurried)
-  // val mapDefFunc = pure("parsley").map(defFuncCurried)
-  // val mapDefFuncGeneric = pure("parsley").map(defFuncGenericCurried)
+  val mapValFunc = pure(valFuncCurried("parsley"))
+  val mapDefFunc = pure(defFuncCurried("parsley"))
+  val mapDefFuncGeneric = pure(defFuncGenericCurried("parsley"))
 
   /* 
   LIKELY WONT DO: it seems impossible to find the type of placeholder variables
   TODO: But we can at least get the shape of the function
   */
-  // val mapPlaceholder = pure("parsley").map(_ + "garnish")
+  val mapPlaceholder = pure("parsley" + "garnish")
 
   /*
   TODO: is this any different from how it would work for x => One(x.length)? Don't think so
@@ -58,13 +58,13 @@ object FunctionTest {
   Also possible to get signature from symbol of method body, if the types are concrete
     (if it's in a lambda like this, it should always be?)
   */
-  // val mapLambda = pure("parsley").map(x => x.toInt + 12)
+  val mapLambda = pure("parsley".toInt + 12)
 
   // TODO: standard anonymous functions (i.e. lambdas) - Term.Function(ParamClause(params), body)
   // get argument types from ParamClause
   // recursively descend into body, in case the function is curried
   // get return type from final body
-  // val mapApplyMethodLambda = pure("parsley").map(x => One(x.length))
+  val mapApplyMethodLambda = pure(One("parsley".length))
 
   // I the below should end up parsed like \x -> \y -> OPAQUE(One(x.length + y))
   // it's NOT worth trying to turn the body of the lambda into our Function representation
@@ -72,10 +72,10 @@ object FunctionTest {
 
   // TODO: Need to have some sort of traversal through and convert this to a lambda
   // This is a Term.AnonymousFunction(...)
-  // val mapApplyMethodPlaceholder = pure("parsley").map(OneGeneric(_))
-  // val mapApplyMethodPlaceholderLabelledType = pure("parsley").map(OneGeneric(_: String))
+  val mapApplyMethodPlaceholder = pure(OneGeneric("parsley"))
+  val mapApplyMethodPlaceholderLabelledType = pure(OneGeneric("parsley": String))
 
-  // val mapApplyMethod = pure(1).map(Two.curried.apply)
+  val mapApplyMethod = pure(Two.curried.apply(1))
 
   // val explicitLiftValFunc = lift2(valFunc, pure("parsley"), pure("garnish"))
   // val explicitLiftDefFunc = lift2(defFunc, pure("parsley"), pure("garnish"))
