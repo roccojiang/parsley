@@ -27,7 +27,7 @@ sealed abstract class Function extends Product with Serializable {
         boundVars.getOrElse(v, HOAS.Var(name, displayType))
       case Lam(xs, f) =>
         HOAS.Abs(xs.size, vs => reflect0(f, boundVars ++ xs.zip(vs)))
-      case App(f, xs @ _*) =>
+      case App(f, xs) =>
         HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
       case Translucent(term, env) =>
         HOAS.Translucent(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
@@ -105,8 +105,10 @@ object Function {
 
   type VarName = String
   case class Var(name: VarName, displayType: Option[Type]) extends Function {
-    val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else Term.Name(name)
-    val unlabelledTerm = Term.Name(name)
+    val unannotatedTerm = Term.Name(name)
+    val term =
+      if (displayType.isEmpty) unannotatedTerm
+      else q"$unannotatedTerm: ${displayType.get}"
   }
 
   object Var {
@@ -115,15 +117,6 @@ object Function {
       Var(name.syntax, displayType)
     }
   }
-
-  // case class Var(prefix: Option[String] = None, displayType: Option[Type] = None) extends Function {
-  //   // Enforce Barendregt's convention
-  //   val name = Term.fresh(prefix.getOrElse("_x"))
-  //   val term = if (displayType.nonEmpty) q"$name: ${displayType.get}" else name
-  // }
-  // object Var {
-  //   def unapply(v: Var): Option[(Term.Name, Option[Type])] = Some((v.name, v.displayType))
-  // }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
   case class Lam(xs: List[Var], f: Function) extends Function {
@@ -148,8 +141,11 @@ object Function {
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
-  case class App(f: Function, xs: Function*) extends Function {
-    val term = q"${f.term}(..${xs.toList.map(_.term)})"
+  case class App(f: Function, xs: List[Function]) extends Function {
+    val term = q"${f.term}(..${xs.map(_.term)})"
+  }
+  object App {
+    def apply(f: Function, x: Function): App = App(f, List(x))
   }
 
   /* id : A => A */
@@ -210,14 +206,10 @@ object Function {
     // Substitute the fresh variables into the function body
     // Comparison using symbols negates scoping problems
     val updatedBody = body.transform {
-      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).unlabelledTerm
+      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).unannotatedTerm
     }.asInstanceOf[Term]
 
     val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
-    println(s"FRESH_PARAMS for $updatedBody: $defaultMap")
-
-    val opaque = Translucent(updatedBody, defaultMap)
-    println(s"BUILT OPAQUE: $opaque")
 
     freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
   }
@@ -230,32 +222,28 @@ object Function {
       case Term.Ascribe(Term.Placeholder(), tpe) =>
         val namedParam = Var.fresh(Some("_p"), Some(tpe))
         namedParams += namedParam
-        namedParam.unlabelledTerm
+        namedParam.unannotatedTerm
       case _: Term.Placeholder =>
         val namedParam = Var.fresh(Some("_p"), None)
         namedParams += namedParam
-        namedParam.unlabelledTerm
+        namedParam.unannotatedTerm
     }.asInstanceOf[Term]
 
-    val defaultMap = namedParams.map(v => v.name.toString -> v).toMap
-    println(s"NAMED_PARAMS: $defaultMap")
+    val params = namedParams.toList
+    val defaultMap = params.map(v => v.name.toString -> v).toMap
 
-    namedParams.toList.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
+    params.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
   }
 
-  def buildFuncFromTerm(f: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
-    parsley.garnish.utils.printInfo(f, debugName)
+  def buildFuncFromTerm(term: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
+    parsley.garnish.utils.printInfo(term, debugName)
 
-    println(s"BUILDING FUNCTION FROM TERM: $f")
+    println(s"BUILDING FUNCTION FROM TERM: $term")
 
-    val func = f match {
-      // * Lambda - look at parameter lists
-      case func: Term.Function => buildFromFunctionTerm(func)
-      // * Lambda with placeholder syntax (similar as above)
-      case func: Term.AnonymousFunction => buildFromAnonFunctionTerm(func)
-      // * Otherwise - just treat as opaque
-      // This should be fine? We'll just do function application like func(arg1)(arg2) without being able to substitute
-      case _ => Translucent(f)
+    val func = term match {
+      case f: Term.Function => buildFromFunctionTerm(f)
+      case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)
+      case _ => Translucent(term)
     }
 
     println(s"\t RESULTFUNC: $func")

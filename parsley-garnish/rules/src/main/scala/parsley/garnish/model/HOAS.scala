@@ -33,15 +33,11 @@ sealed abstract class HOAS extends Product with Serializable {
 
   def reify: Function = {
     val reified = this match {
-      case Abs(n, f) => {
-        // println(s"REIFYING ABS $n $f")
+      case Abs(n, f) =>
         val params = (1 to n).map(_ => Function.Var.fresh(Some("hoas"))).toList
         Function.Lam(params, f(params.map(x => HOAS.Var(x.name, None))).reify)
-      }
-      case App(f, xs) => {
-        // println(s"REIFYING APP $f $xs")
-        Function.App(f.reify, xs.map(_.reify): _*)
-      }
+      case App(f, xs) =>
+        Function.App(f.reify, xs.map(_.reify))
       case Translucent(t, env) => Function.Translucent(t, env.map { case (v, f) => v -> f.reify })
       case Var(name, displayType) => Function.Var(name, displayType)
     }
@@ -51,14 +47,14 @@ sealed abstract class HOAS extends Product with Serializable {
 }
 
 object HOAS {
-  case class Abs(n: Int, f: Seq[HOAS] => HOAS) extends HOAS
+  case class Abs(n: Int, f: List[HOAS] => HOAS) extends HOAS
   object Abs {
-    def apply(f: Seq[HOAS] => HOAS): Abs = Abs(1, f)
+    def apply(f: List[HOAS] => HOAS): Abs = Abs(1, f)
   }
 
-  case class App private (f: HOAS, xs: Seq[HOAS]) extends HOAS
+  case class App private (f: HOAS, xs: List[HOAS]) extends HOAS
   object App {
-    def apply(f: Seq[HOAS], xs: Seq[HOAS]): App = {
+    def apply(f: List[HOAS], xs: List[HOAS]): App = {
       assert(f.size == 1) // TODO: ew
       App(f.head, xs)
     }
@@ -67,12 +63,10 @@ object HOAS {
   // TODO: this is a specialisation of Opaque (for 'unknowns'), I guess, so is this required?
   case class Var(name: VarName, displayType: Option[Type]) extends HOAS
 
-  // case class Tuple(xs: Seq[HOAS]) extends HOAS
-
   case class Translucent(t: Term, env: Map[VarName, HOAS] = Map.empty) extends HOAS
 
   // def appC(f: HOAS, xs: HOAS*): HOAS = xs.foldLeft(f)(App(_, _))
-  def appC(f: HOAS, xs: HOAS*): HOAS = xs.foldLeft(f)((acc, x) => App(acc, Seq(x)))
+  def appC(f: HOAS, xs: HOAS*): HOAS = xs.foldLeft(f)((acc, x) => App(acc, List(x)))
 
   /* flip : (A => B => C) => B => A => C */
   def flip: HOAS = {
