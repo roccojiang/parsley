@@ -5,6 +5,8 @@
  */
 package parsley.debugger.util
 
+import scala.annotation.nowarn
+
 import parsley.Parsley
 import parsley.debugger.internal.Renamer
 import parsley.token.Lexer
@@ -30,9 +32,16 @@ object Collector {
       *       be advised to manually name one's parsers (to be debugged) using [[assignName]] or
       *       [[parsley.debugger.combinator.named]] if that warning is not desirable.
       */
+    @deprecated("The functionality of this class has been subsumed by the `parsley.debuggable` annotation", "5.0.0-M7")
     def names(obj: Any): Unit = {
         collectDefault() // Runs only once, ever, for a program execution.
         Renamer.addNames(XCollector.collectNames(obj))
+    }
+
+    def registerNames(names: Map[Parsley[_], String]): Unit = {
+        Renamer.addNames(names.map {
+            case (k, v) => k.internal -> v
+        })
     }
 
     /** Collect names of parsers from a [[parsley.token.Lexer]].
@@ -41,6 +50,7 @@ object Collector {
       *       being deprecated.
       * @see [[names]] for more information regarding the warning.
       */
+    //@deprecated("This functionality has been absorbed into parsley itself", "5.0.0-M7")
     def lexer(lexer: Lexer): Unit = {
         collectDefault()
         Renamer.addNames(XCollector.collectLexer(lexer))
@@ -73,10 +83,10 @@ object Collector {
             if (!defaultCollected) {
                 defaultCollected = true
 
-                names(parsley.character)
-                names(parsley.combinator)
-                names(parsley.Parsley)
-                names(parsley.position)
+                names(parsley.character): @nowarn
+                names(parsley.combinator): @nowarn
+                names(parsley.Parsley): @nowarn
+                names(parsley.position): @nowarn
             }
         }
     }

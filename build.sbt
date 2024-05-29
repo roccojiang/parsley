@@ -3,7 +3,7 @@ import _root_.parsley.build.mima
 val projectName = "parsley"
 val Scala213 = "2.13.14"
 val Scala212 = "2.12.18"
-val Scala3 = "3.3.1"
+val Scala3 = "3.3.3"
 val Java8 = JavaSpec.temurin("8")
 val JavaLTS = JavaSpec.temurin("11")
 val JavaLatest = JavaSpec.temurin("17")
@@ -78,6 +78,40 @@ lazy val parsley = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     Compile / doc / scalacOptions ++= Seq("-doc-root-content", s"${baseDirectory.value.getPath}/rootdoc.md"),
   )
 
+lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .withoutSuffixFor(JVMPlatform)
+  .crossType(CrossType.Full)
+  .in(file("parsley-debug"))
+  .dependsOn(parsley % "compile->compile;test->test") // Forwards the test classes to this project. Needed for ParsleyTest.
+  .settings(
+    name := "parsley-debug",
+    commonSettings,
+    scalacOptions ++= {
+        scalaVersion.value match {
+            case Scala213 => Seq("-Ymacro-annotations")
+            case Scala3   => Seq.empty
+            case Scala212 => Seq.empty
+        }
+    },
+    libraryDependencies ++= {
+      // Reflection library choice per Scala version.
+      scalaVersion.value match {
+        case v@Scala212 => Seq(
+            "org.scala-lang" % "scala-reflect" % v,
+            compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full),
+        )
+        case v@Scala213 => Seq("org.scala-lang" % "scala-reflect" % v)
+        case _          => Seq()
+      }
+    },
+
+    tlVersionIntroduced := Map(
+      "2.13" -> "4.5.0",
+      "2.12" -> "4.5.0",
+      "3"    -> "4.5.0",
+    ),
+  )
+
 lazy val docs = project
   .in(file("site"))
   .dependsOn(parsley.jvm)
@@ -92,36 +126,6 @@ lazy val docs = project
         "org.typelevel" %% "cats-core" % "2.10.0",
         "com.github.j-mie6" %% "parsley-cats" % "1.3.0"
     ),
-  )
-
-lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .withoutSuffixFor(JVMPlatform)
-  .crossType(CrossType.Full)
-  .in(file("parsley-debug"))
-  .dependsOn(parsley % "compile->compile;test->test") // Forwards the test classes to this project. Needed for ParsleyTest.
-  .settings(
-    name := "parsley-debug",
-    commonSettings,
-
-    tlVersionIntroduced := Map(
-      "2.13" -> "4.5.0",
-      "2.12" -> "4.5.0",
-      "3"    -> "4.5.0",
-    ),
-  )
-  .jvmSettings(
-    libraryDependencies ++= {
-      // Reflection library choice per Scala version.
-      CrossVersion.partialVersion(Keys.scalaVersion.value) match {
-        case Some((2, 12)) =>
-          Seq("org.scala-lang" % "scala-reflect" % Scala212)
-        case Some((2, 13)) =>
-          Seq("org.scala-lang" % "scala-reflect" % Scala213)
-        case _             =>
-          // No Scala library for any other version (2.11, 3, etc.).
-          Seq()
-      }
-    }
   )
 
 lazy val parsleyGarnishSettings = commonSettings ++ Seq(

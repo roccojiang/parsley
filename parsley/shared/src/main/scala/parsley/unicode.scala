@@ -15,7 +15,7 @@ import parsley.internal.deepembedding.singletons
   *
   * In particular, this module contains: combinators that can read specific characters; combinators that represent character classes and their negations;
   * combinators for reading specific strings; as well as a selection of pre-made parsers to parse specific kinds of character, like digits and letters.
-  * Unlike [[parsley.character `character`]], this module handles full utf-16 codepoints, which can be up to two 16-bit characters long.
+  * Unlike [[parsley.character$ `character`]], this module handles full utf-16 codepoints, which can be up to two 16-bit characters long.
   *
   * @since 4.4.0
   *
@@ -370,7 +370,7 @@ object unicode {
       *
       * @example {{{
       * scala> import parsley.unicode.{letter, letterOrDigit, stringOfMany}
-      * scala> import parsley.syntax.zipped.Zipped2
+      * scala> import parsley.syntax.zipped._
       * scala> val ident = (letter, stringOfMany(letterOrDigit)).zipped((c, s) => s"&#36;{Character.toString(c)}&#36;s")
       * scala> ident.parse("abdc9d")
       * val res0 = Success("abdc9d")
@@ -397,7 +397,7 @@ object unicode {
       *
       * @example {{{
       * scala> import parsley.unicode.{letter, stringOfMany}
-      * scala> import parsley.syntax.zipped.Zipped2
+      * scala> import parsley.syntax.zipped._
       * scala> val ident = (letter, stringOfMany(Character.isLetterOrDigit(_))).zipped((c, s) => s"&#36;{Character.toString(c)}&#36;s")
       * scala> ident.parse("abdc9d")
       * val res0 = Success("abdc9d")
