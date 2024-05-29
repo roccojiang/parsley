@@ -62,8 +62,12 @@ sealed abstract class Parser extends Product with Serializable {
       case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(_.transform(pf)))
       case Zipped(f, ps) => Zipped(f, ps.map(_.transform(pf)))
       case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
-      case Pure(f) => Pure(f)
-      case _ => this
+
+      case s: Str => s
+      case p: Pure => p
+      case Empty => Empty
+      case nt: NonTerminal => nt
+      case unk: Unknown => unk
     }
   
     if (pf.isDefinedAt(p)) pf(p) else p
@@ -229,9 +233,9 @@ object Parser {
       val UnfoldedParser(_, pn, pl) = p.unfold()
 
       val lefts = pl.map {
-        val f = Var()
-        val xs = Var()
-        val nt = Var()
+        val f = Var.fresh()
+        val xs = Var.fresh()
+        val nt = Var.fresh()
 
         // \f xs nt -> f nt : xs
         Lam(f, Lam(xs, Lam(nt, consH(App(f, nt), xs))))
@@ -239,7 +243,7 @@ object Parser {
 
       val nonLefts = SomeP(pn)
 
-      UnfoldedParser(Some(Opaque(q"Nil")), nonLefts, lefts)
+      UnfoldedParser(Some(Translucent(q"Nil")), nonLefts, lefts)
     }
   }
   object Many {
@@ -306,7 +310,7 @@ object Parser {
 
     override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       val liftedFunc: Parser = Pure(func match {
-        case Opaque(f @ Term.Name(_), substs) if parsers.size > 1 => Opaque(q"$f.curried", substs)
+        case Translucent(f @ Term.Name(_), substs) if parsers.size > 1 => Translucent(q"$f.curried", substs)
         case _ => func
       })
       val curried = parsers.foldLeft(liftedFunc)(_ <*> _)
@@ -381,15 +385,6 @@ object Parser {
         val func = Function.buildFuncFromTerm(fun, "BRIDGE")
         Bridge(func, ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
-  }
-
-  // TODO: remove this placeholder parser
-  final case class Named(name: String, parser: Parser) extends Parser {
-    val term = q"$name(${parser.term})"
-
-    override def unfold()(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      UnfoldedParser(None, this, Empty)
-    }
   }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
