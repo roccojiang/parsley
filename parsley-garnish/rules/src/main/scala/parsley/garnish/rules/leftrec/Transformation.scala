@@ -47,6 +47,6 @@ object Transformation {
   }
 
   private def unfold(env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedParser = {
-    env(nonTerminal).parser.unfold()(UnfoldingContext(Set.empty, env, nonTerminal), doc)
+    env(nonTerminal).parser.unfold(UnfoldingContext(Set.empty, env, nonTerminal), doc)
   }
 }

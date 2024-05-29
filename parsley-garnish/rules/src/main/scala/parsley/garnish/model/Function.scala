@@ -1,8 +1,6 @@
 package parsley.garnish.model
 
-import scala.collection.mutable
 import scala.meta._
-import scalafix.v1._
 
 sealed abstract class Function extends Product with Serializable {
   import Function._
@@ -184,69 +182,4 @@ object Function {
     Lam(x, Lam(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
   }
   def consH(x: Function, xs: Function): Function = App(App(cons, x), xs)
-
-  private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Function = {
-    type ParameterLists = List[List[Term.Param]]
-
-    @annotation.tailrec
-    def recurseParamLists(t: Term, acc: ParameterLists): (ParameterLists, Term) = t match {
-      case Term.Function.After_4_6_0(params, body) => recurseParamLists(body, params.values :: acc)
-      case _ => (acc, t)
-    }
-
-    val (reversedParamLists, body) = recurseParamLists(func, List.empty)
-
-    // Replace each method parameter with a fresh variable to preserve Barendregt's convention
-    val freshReplacements = reversedParamLists.reverse.map(_.collect {
-      case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var.fresh(Some("_l"), decltpe)
-    })
-    val freshParams = freshReplacements.map(_.map(_._2))
-    val symbolsMap = freshReplacements.flatten.toMap
-
-    // Substitute the fresh variables into the function body
-    // Comparison using symbols negates scoping problems
-    val updatedBody = body.transform {
-      case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).unannotatedTerm
-    }.asInstanceOf[Term]
-
-    val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
-
-    freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
-  }
-
-  private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
-    val namedParams = mutable.ListBuffer.empty[Var]
-
-    // This assumes an in-order traversal, although I'm not aware if this is guaranteed
-    val transformedFunc = func.transform {
-      case Term.Ascribe(Term.Placeholder(), tpe) =>
-        val namedParam = Var.fresh(Some("_p"), Some(tpe))
-        namedParams += namedParam
-        namedParam.unannotatedTerm
-      case _: Term.Placeholder =>
-        val namedParam = Var.fresh(Some("_p"), None)
-        namedParams += namedParam
-        namedParam.unannotatedTerm
-    }.asInstanceOf[Term]
-
-    val params = namedParams.toList
-    val defaultMap = params.map(v => v.name.toString -> v).toMap
-
-    params.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
-  }
-
-  def buildFuncFromTerm(term: Term, debugName: String)(implicit doc: SemanticDocument): Function = {
-    parsley.garnish.utils.printInfo(term, debugName)
-
-    println(s"BUILDING FUNCTION FROM TERM: $term")
-
-    val func = term match {
-      case f: Term.Function => buildFromFunctionTerm(f)
-      case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)
-      case _ => Translucent(term)
-    }
-
-    println(s"\t RESULTFUNC: $func")
-    func
-  }
 }
