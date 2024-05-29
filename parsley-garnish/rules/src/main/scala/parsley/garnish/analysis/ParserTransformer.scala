@@ -46,7 +46,6 @@ object ParserTransformer {
                                    (implicit doc: SemanticDocument): ParserDefinition = {
     val tpe = getParsleyType(sym)
     assert(tpe.isDefined, s"expected a Parsley type for $name, got ${sym.info.get.signature}")
-    println(s"%%% Building parser definition for $name with type $tpe")
     ParserDefinition(name, body.toParser, tpe.get, body)
   }
 }
