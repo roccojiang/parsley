@@ -118,7 +118,7 @@ object Parser {
     }
   }
   object Pure {
-    val matcher = SymbolMatcher.normalized("parsley.Parsley.pure")
+    val matcher = SymbolMatcher.normalized("parsley.ParsleyImpl.pure")
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Pure] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(func), _)) =>
@@ -133,7 +133,7 @@ object Parser {
       UnfoldedParser(None, Empty, Empty)
     }
     
-    val matcher = SymbolMatcher.normalized("parsley.Parsley.empty")
+    val matcher = SymbolMatcher.normalized("parsley.ParsleyImpl.empty")
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Empty.type] = {
       case matcher(Term.Name(_)) => Empty
@@ -247,7 +247,7 @@ object Parser {
     }
   }
   object Many {
-    val matcher = SymbolMatcher.normalized("parsley.Parsley.many")
+    val matcher = SymbolMatcher.normalized("parsley.ParsleyImpl.many")
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Many] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(p), _)) =>
@@ -264,7 +264,7 @@ object Parser {
     }
   }
   object SomeP {
-    val matcher = SymbolMatcher.normalized("parsley.Parsley.some")
+    val matcher = SymbolMatcher.normalized("parsley.ParsleyImpl.some")
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, SomeP] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(p), _)) =>
@@ -324,7 +324,7 @@ object Parser {
   }
   object LiftImplicit {
     val matcher = SymbolMatcher.normalized(
-      (0 to 22).map(i => s"parsley.syntax.lift.Lift$i#lift"): _*
+      (0 to 22).map(i => s"parsley.syntax.lift.liftSyntax$i"): _*
     )
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftImplicit] = {
@@ -359,7 +359,7 @@ object Parser {
   }
   object Zipped {
     val matcher = SymbolMatcher.normalized(
-      (2 to 22).map(i => s"parsley.syntax.zipped.Zipped$i#zipped"): _*
+      (2 to 22).map(i => s"parsley.syntax.zipped.zippedSyntax$i"): _*
     )
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {

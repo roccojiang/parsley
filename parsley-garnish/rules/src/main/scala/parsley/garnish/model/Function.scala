@@ -7,6 +7,8 @@ sealed abstract class Function extends Product with Serializable {
 
   def term: Term
 
+  def isEquivalent(other: Function): Boolean = this.reflect.reify == other.reflect.reify
+
   def normalise: Function = this.reflect.normalise.reify
   // {
   //   println(s"1) NORMALISING $this")
@@ -19,7 +21,7 @@ sealed abstract class Function extends Product with Serializable {
   //   reified
   // }
 
-  private def reflect: HOAS = {
+  def reflect: HOAS = {
     def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
       case v @ Var(name, displayType) =>
         boundVars.getOrElse(v, HOAS.Var(name, displayType))
