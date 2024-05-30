@@ -107,16 +107,17 @@ object Parser {
         assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
 
         if (ref == ctx.nonTerminal) {
-          println(s"NT CASE 1 (ctx ${ctx.visited}): $this")
           UnfoldedParser(None, Empty, Pure(id))
-        // TODO: do we actually need the inlining behaviour by recursively visiting? can't we assume all parsers will be transformed
-        // } else if (ctx.visited.contains(ref)) {
-        //   UnfoldedParser(None, NonTerminal(ref), Empty)
-        // } else {
-        //   ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
-        // }
-        } else {
+        } else if (ctx.visited.contains(ref)) {
           UnfoldedParser(None, NonTerminal(ref), Empty)
+        } else {
+          val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
+
+          if (unfoldedRef.leftRec.simplify == Empty)
+            // The non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly
+            UnfoldedParser(None, NonTerminal(ref), Empty)
+          else
+            unfoldedRef // in the left-recursive case, we need to inline the result of the unfolded non-terminal
         }
       }
     }

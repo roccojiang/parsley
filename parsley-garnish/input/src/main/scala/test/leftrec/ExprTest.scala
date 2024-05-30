@@ -28,7 +28,6 @@ object ExprTest {
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
   lazy val atom: Parsley[Expr] = (char('(') ~> expr <~ char(')')) | Num(number)
 
-  def add(a: String)(b: String) = a + b
-  lazy val ruleA = ruleB.map(add) <*> string("a") | string("a")
-  lazy val ruleB: Parsley[String] = ruleA.map(add) <*> string("b") | string("b")
+  lazy val ruleA = ruleB.map(a => b => a + b) <*> string("a") | string("a")
+  lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
 }
