@@ -16,7 +16,7 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def normalise: Parser = this.rewrite {
+  def simplify: Parser = this.rewrite {
     // p <|> empty == p
     case Choice(p, Empty) => p
     // empty <|> q == q
@@ -38,6 +38,12 @@ sealed abstract class Parser extends Product with Serializable {
     // p.map(f).map(g) == p.map(g compose f)
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
 
+    // p.map(\x -> \y -> y) <*> q == p ~> q
+    case Ap(FMap(p, Lam(_, Lam(y :: Nil, z))), q) if y == z => Then(p, q)
+
+    // p.map(\x -> \y -> x) <*> q == p <~ q
+    case Ap(FMap(p, Lam(x :: Nil, Lam(_, z))), q) if x == z => ThenDiscard(p, q)
+
   }.simplifyFunctions
 
   private def simplifyFunctions: Parser = this.transform {
@@ -54,6 +60,8 @@ sealed abstract class Parser extends Product with Serializable {
     val p = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
       case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
+      case Then(p, q) => Then(p.transform(pf), q.transform(pf))
+      case ThenDiscard(p, q) => ThenDiscard(p.transform(pf), q.transform(pf))
       case FMap(p, f) => FMap(p.transform(pf), f)
       case Many(p) => Many(p.transform(pf))
       case SomeP(p) => SomeP(p.transform(pf))
@@ -80,7 +88,7 @@ sealed abstract class Parser extends Product with Serializable {
     this.transform(pf0)
   }
 
-  // override def toString: String = term.syntax
+  override def toString: String = term.syntax
 }
 
 object Parser {
@@ -88,7 +96,7 @@ object Parser {
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
   case class UnfoldedParser(empty: Option[Function], nonLeftRec: Parser, leftRec: Parser)
 
-  final case class NonTerminal(val ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
+  final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName)
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -99,11 +107,16 @@ object Parser {
         assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
 
         if (ref == ctx.nonTerminal) {
+          println(s"NT CASE 1 (ctx ${ctx.visited}): $this")
           UnfoldedParser(None, Empty, Pure(id))
-        } else if (ctx.visited.contains(ref)) {
-          UnfoldedParser(None, NonTerminal(ref), Empty)
+        // TODO: do we actually need the inlining behaviour by recursively visiting? can't we assume all parsers will be transformed
+        // } else if (ctx.visited.contains(ref)) {
+        //   UnfoldedParser(None, NonTerminal(ref), Empty)
+        // } else {
+        //   ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
+        // }
         } else {
-          ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
+          UnfoldedParser(None, NonTerminal(ref), Empty)
         }
       }
     }
@@ -170,18 +183,22 @@ object Parser {
       val UnfoldedParser(pe, pn, pl) = p.unfold
       val UnfoldedParser(qe, qn, ql) = q.unfold
 
+      println(s"AP $this")
+
       val empty =
         if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
         else None
+      
+      println(s"\tEMPTY = $empty; pe = $pe, qe = $qe")
 
       val lefts = {
         val llr = pl.map(flip) <*> q
         val rlr = pe match {
           case None => Empty
-          case Some(f) => {
-            ql.map(composeH(f))
-          }
+          case Some(f) => ql.map(composeH(f))
         }
+
+        println(s"\tLEFTS = ${(llr <|> rlr).simplify}, llr = $llr, rlr = $rlr")
 
         llr <|> rlr
       }
@@ -193,7 +210,9 @@ object Parser {
           case Some(f) => qn.map(f)
         }
 
-        lnl <|> rnl
+        println(s"\tNON-LEFTS = ${(lnl <|> rnl).simplify}, lnl = $lnl, rnl = $rnl")
+
+        rnl <|> lnl
       }
 
       UnfoldedParser(empty, nonLefts, lefts)
@@ -205,6 +224,48 @@ object Parser {
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Ap] = {
       case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
         Ap(p.toParser, q.toParser)
+    }
+  }
+
+  final case class Then(p: Parser, q: Parser) extends Parser {
+    val term = q"${p.term} ~> ${q.term}"
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val x = Var.fresh()
+      val y = Var.fresh()
+      // const id = \x -> \y -> y
+      val f = Lam(x, Lam(y, y))
+
+      (p.map(f) <*> q).unfold
+    }
+  }
+  object Then {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.`~>`", "parsley.Parsley.`*>`")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Then] = {
+      case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
+        Then(p.toParser, q.toParser)
+    }
+  }
+
+  final case class ThenDiscard(p: Parser, q: Parser) extends Parser {
+    val term = q"${p.term} <~ ${q.term}"
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val x = Var.fresh()
+      val y = Var.fresh()
+      // const = \x -> \y -> x
+      val f = Lam(x, Lam(y, x))
+
+      (p.map(f) <*> q).unfold
+    }
+  }
+  object ThenDiscard {
+    val matcher = SymbolMatcher.normalized("parsley.Parsley.`<~`", "parsley.Parsley.`<*`")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, ThenDiscard] = {
+      case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
+        ThenDiscard(p.toParser, q.toParser)
     }
   }
 

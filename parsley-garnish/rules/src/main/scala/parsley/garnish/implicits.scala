@@ -39,6 +39,8 @@ object implicits {
         Empty.fromTerm,
         Choice.fromTerm,
         Ap.fromTerm,
+        Then.fromTerm,
+        ThenDiscard.fromTerm,
         FMap.fromTerm,
         Many.fromTerm,
         SomeP.fromTerm,
