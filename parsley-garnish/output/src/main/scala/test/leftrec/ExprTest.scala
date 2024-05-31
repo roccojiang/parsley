@@ -22,16 +22,16 @@ object ExprTest {
   object Num extends ParserBridge1[Int, Num]
 
   val number = digit.foldLeft1(0)(((n, d) => n * 10 + d.asDigit))
-
   // TODO: fix compilation issues with expr, term
   lazy val expr: Parsley[Expr] = chain.postfix[Expr](term)((char('+') ~> term).map(hoas611 => hoas612 => Add.curried(hoas612)(hoas611)) | (char('-') ~> term).map(hoas613 => hoas614 => Sub.curried(hoas614)(hoas613)))
   lazy val term: Parsley[Expr] = chain.postfix[Expr](negate)((char('*') ~> negate).map(hoas841 => hoas842 => Mul.curried(hoas842)(hoas841)))
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
   lazy val atom: Parsley[Expr] = (char('(') ~> expr <~ char(')')) | Num(number)
 
-  def add(a: String)(b: String) = a + b
   // lazy val ruleA = chain.postfix[String](string("b").map(hoas677 => hoas678 => hoas677 + hoas678) <*> string("a") | string("a"))(string("b").map(hoas679 => hoas680 => hoas681 => hoas681 + hoas679 + hoas680) <*> string("a"))
   // TODO: if I could rewrite using zipped syntax to have better type inference, that would be great
   lazy val ruleA = chain.postfix[String](string("b").map(hoas677 => hoas678 => hoas677 + hoas678) <*> string("a") | string("a"))((string("b"), string("a")).zipped((hoas679, hoas680) => hoas681 => hoas681 + hoas679 + hoas680))
-  lazy val ruleB: Parsley[String] = ruleA.map(add) <*> string("b") | string("b")
+  lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
+
+  lazy val p: Parsley[String] = chain.postfix[String](string("b"))(string("a").map(hoas21 => hoas22 => hoas22 + hoas21))
 }

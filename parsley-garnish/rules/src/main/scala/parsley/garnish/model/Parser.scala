@@ -88,7 +88,7 @@ sealed abstract class Parser extends Product with Serializable {
     this.transform(pf0)
   }
 
-  override def toString: String = term.syntax
+  // override def toString: String = term.syntax
 }
 
 object Parser {
@@ -386,7 +386,9 @@ object Parser {
   }
   object LiftImplicit {
     val matcher = SymbolMatcher.normalized(
-      (0 to 22).map(i => s"parsley.syntax.lift.liftSyntax$i"): _*
+      (0 to 22).map(i =>
+        Seq(s"parsley.syntax.Lift$i#lift", s"parsley.syntax.lift.liftSyntax$i")
+      ).flatten: _*
     )
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftImplicit] = {
@@ -421,7 +423,9 @@ object Parser {
   }
   object Zipped {
     val matcher = SymbolMatcher.normalized(
-      (2 to 22).map(i => s"parsley.syntax.zipped.zippedSyntax$i"): _*
+      (2 to 22).map(i =>
+        Seq(s"parsley.syntax.Zipped$i#zipped", s"parsley.syntax.zipped.zippedSyntax$i")
+      ).flatten: _*
     )
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {

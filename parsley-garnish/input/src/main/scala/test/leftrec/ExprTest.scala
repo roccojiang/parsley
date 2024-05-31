@@ -6,6 +6,7 @@ package test.leftrec
 import parsley.Parsley
 import parsley.character._
 import parsley.generic._
+import parsley.syntax.zipped._
 
 object ExprTest {
   sealed trait Expr
@@ -22,7 +23,6 @@ object ExprTest {
   object Num extends ParserBridge1[Int, Num]
 
   val number = digit.foldLeft1(0)(((n, d) => n * 10 + d.asDigit))
-
   lazy val expr: Parsley[Expr] = Add(expr, char('+') ~> term) | Sub(expr, char('-') ~> term) | term
   lazy val term: Parsley[Expr] = Mul(term, char('*') ~> negate) | negate
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
@@ -30,4 +30,6 @@ object ExprTest {
 
   lazy val ruleA = ruleB.map(a => b => a + b) <*> string("a") | string("a")
   lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
+
+  lazy val p: Parsley[String] = (p, string("a")).zipped(_ + _) | string("b")
 }

@@ -15,6 +15,7 @@ object Transformation {
 
     for (sym <- nonTerminals.keys) {
       val unfolded = unfold(nonTerminals.toMap, sym)
+      println(s">>> UNFOLDED: $sym -> $unfolded")
       val transformedParser = transform(unfolded, nonTerminals(sym).tpe)
       if (transformedParser.isDefined) {
         nonTerminals(sym) = nonTerminals(sym).copy(parser = transformedParser.get)
