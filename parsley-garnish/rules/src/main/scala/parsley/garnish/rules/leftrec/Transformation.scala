@@ -21,6 +21,7 @@ object Transformation {
       }
     }
 
+    // TODO: make patches atomic?
     nonTerminals.values.map {
       case ParserDefinition(_, transformed, _, originalTree) =>
           Patch.replaceTree(originalTree, transformed.term.syntax)
@@ -35,14 +36,15 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    leftRec.normalise match {
+    leftRec.simplify match {
       case Empty => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored -- should this be looking for any parser which can parse empty?
       // TODO: import postfix if not in scope
       // TODO: report can't left factor if there are impure parsers
       case leftRec =>
-        println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
-        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).normalise)
+        // println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
+        // println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
+        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
     }
   }
 
