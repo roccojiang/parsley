@@ -15,7 +15,6 @@ object Transformation {
 
     for (sym <- nonTerminals.keys) {
       val unfolded = unfold(nonTerminals.toMap, sym)
-      println(s">>> UNFOLDED: $sym -> $unfolded")
       val transformedParser = transform(unfolded, nonTerminals(sym).tpe)
       if (transformedParser.isDefined) {
         nonTerminals(sym) = nonTerminals(sym).copy(parser = transformedParser.get)
@@ -43,8 +42,8 @@ object Transformation {
       // TODO: import postfix if not in scope
       // TODO: report can't left factor if there are impure parsers
       case leftRec =>
-        println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
-        println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
+        // println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
+        // println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
         Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
     }
   }

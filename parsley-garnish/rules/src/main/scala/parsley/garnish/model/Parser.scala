@@ -184,35 +184,19 @@ object Parser {
       val UnfoldedParser(pe, pn, pl) = p.unfold
       val UnfoldedParser(qe, qn, ql) = q.unfold
 
-      println(s"AP $this")
-
       val empty =
         if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
         else None
-      
-      println(s"\tEMPTY = $empty; pe = $pe, qe = $qe")
 
       val lefts = {
         val llr = pl.map(flip) <*> q
-        val rlr = pe match {
-          case None => Empty
-          case Some(f) => ql.map(composeH(f))
-        }
-
-        println(s"\tLEFTS = ${(llr <|> rlr).simplify}, llr = $llr, rlr = $rlr")
-
+        val rlr = pe.map(f => ql.map(composeH(f))).getOrElse(Empty)
         llr <|> rlr
       }
 
       val nonLefts = {
         val lnl = pn <*> q
-        val rnl = pe match {
-          case None => Empty
-          case Some(f) => qn.map(f)
-        }
-
-        println(s"\tNON-LEFTS = ${(lnl <|> rnl).simplify}, lnl = $lnl, rnl = $rnl")
-
+        val rnl = pe.map(f => qn.map(f)).getOrElse(Empty)
         rnl <|> lnl
       }
 
