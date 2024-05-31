@@ -4,7 +4,6 @@ import parsley.Parsley
 import parsley.character._
 import parsley.generic._
 import parsley.expr.chain
-import parsley.lift._
 import parsley.syntax.zipped._
 
 object ExprTest {
@@ -30,7 +29,8 @@ object ExprTest {
 
   // lazy val ruleA = chain.postfix[String](string("b").map(hoas677 => hoas678 => hoas677 + hoas678) <*> string("a") | string("a"))(string("b").map(hoas679 => hoas680 => hoas681 => hoas681 + hoas679 + hoas680) <*> string("a"))
   // TODO: if I could rewrite using zipped syntax to have better type inference, that would be great
-  lazy val ruleA = chain.postfix[String](string("b").map(hoas677 => hoas678 => hoas677 + hoas678) <*> string("a") | string("a"))((string("b"), string("a")).zipped((hoas679, hoas680) => hoas681 => hoas681 + hoas679 + hoas680))
+  lazy val ruleA = chain.postfix[String]((string("b"), string("a")).zipped((hoas579, hoas580) => hoas579 + hoas580) | string("a"))((string("b"), string("a")).zipped((hoas581, hoas582) => hoas583 => hoas583 + hoas581 + hoas582))
+  // lazy val ruleA = chain.postfix[String](string("b").map(hoas677 => hoas678 => hoas677 + hoas678) <*> string("a") | string("a"))((string("b"), string("a")).zipped((hoas679, hoas680) => hoas681 => hoas681 + hoas679 + hoas680))
   lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
 
   lazy val p: Parsley[String] = chain.postfix[String](string("b"))(string("a").map(hoas21 => hoas22 => hoas22 + hoas21))
