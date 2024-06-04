@@ -4,6 +4,8 @@ import scala.meta._
 import scalafix.v1._
 
 import parsley.garnish.analysis.ParserTransformer.{getAllParserDefns, ParserDefinition}
+import parsley.garnish.utils.recursivelyPrintSymbol
+import scalafix.lint.LintSeverity
 
 class SimplifyComplexParsers extends SemanticRule("SimplifyComplexParsers") {
   override def fix(implicit doc: SemanticDocument): Patch = {

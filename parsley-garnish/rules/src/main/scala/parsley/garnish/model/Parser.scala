@@ -39,17 +39,17 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
 
     // p.map(\x -> \y -> y) <*> q == p ~> q
-    case Ap(FMap(p, Lam(_, Lam(y :: Nil, z))), q) if y == z => Then(p, q)
+    case Ap(FMap(p, Abs(_, Abs(y :: Nil, z))), q) if y == z => Then(p, q)
     // p.map(\x -> \y -> x) <*> q == p <~ q
-    case Ap(FMap(p, Lam(x :: Nil, Lam(_, z))), q) if x == z => ThenDiscard(p, q)
+    case Ap(FMap(p, Abs(x :: Nil, Abs(_, z))), q) if x == z => ThenDiscard(p, q)
 
     // f.curried.map(p) <*> q == (p, q).zipped(f)
-    case Ap(FMap(p1, Lam(x1 :: Nil, Lam(x2 :: Nil, body))), p2) =>
-      Zipped(Lam(List(x1, x2), body), List(p1, p2))
-    case Ap(Ap(FMap(p1, Lam(x1 :: Nil, Lam(x2 :: Nil, Lam(x3 :: Nil, body)))), p2), p3) =>
-      Zipped(Lam(List(x1, x2, x3), body), List(p1, p2, p3))
-    case Ap(Ap(Ap(FMap(p1, Lam(x1 :: Nil, Lam(x2 :: Nil, Lam(x3 :: Nil, Lam(x4 :: Nil, body))))), p2), p3), p4) =>
-      Zipped(Lam(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
+    case Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, body))), p2) =>
+      Zipped(Abs(List(x1, x2), body), List(p1, p2))
+    case Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, body)))), p2), p3) =>
+      Zipped(Abs(List(x1, x2, x3), body), List(p1, p2, p3))
+    case Ap(Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, Abs(x4 :: Nil, body))))), p2), p3), p4) =>
+      Zipped(Abs(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
     // TODO: up to 22
 
   }.simplifyFunctions
@@ -227,7 +227,7 @@ object Parser {
       val x = Var.fresh()
       val y = Var.fresh()
       // const id = \x -> \y -> y
-      val f = Lam(x, Lam(y, y))
+      val f = Abs(x, Abs(y, y))
 
       (p.map(f) <*> q).unfold
     }
@@ -248,7 +248,7 @@ object Parser {
       val x = Var.fresh()
       val y = Var.fresh()
       // const = \x -> \y -> x
-      val f = Lam(x, Lam(y, x))
+      val f = Abs(x, Abs(y, x))
 
       (p.map(f) <*> q).unfold
     }
@@ -292,7 +292,7 @@ object Parser {
         val nt = Var.fresh()
 
         // \f xs nt -> f nt : xs
-        Lam(f, Lam(xs, Lam(nt, consH(App(f, nt), xs))))
+        Abs(f, Abs(xs, Abs(nt, consH(App(f, nt), xs))))
       } <*> Many(p)
 
       val nonLefts = SomeP(pn)

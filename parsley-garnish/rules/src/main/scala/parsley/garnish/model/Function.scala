@@ -9,7 +9,7 @@ sealed abstract class Function extends Product with Serializable {
 
   def isEquivalent(other: Function): Boolean = this.reflect.reify == other.reflect.reify
 
-  def normalise: Function = this.reflect.normalise.reify
+  def normalise: Function = this.reflect.eval.reify
   // {
   //   println(s"1) NORMALISING $this")
   //   val reflected = this.reflect
@@ -25,8 +25,8 @@ sealed abstract class Function extends Product with Serializable {
     def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
       case v @ Var(name, displayType) =>
         boundVars.getOrElse(v, HOAS.Var(name, displayType))
-      case Lam(xs, f) =>
-        HOAS.Abs(xs.size, vs => reflect0(f, boundVars ++ xs.zip(vs)))
+      case Abs(xs, f) =>
+        HOAS.Abs(xs.size, xs.map(_.displayType), vs => reflect0(f, boundVars ++ xs.zip(vs)))
       case App(f, xs) =>
         HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
       case Translucent(term, env) =>
@@ -85,7 +85,9 @@ sealed abstract class Function extends Product with Serializable {
 }
 
 object Function {
-  case class Translucent(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Function {
+  trait Lambda extends Function
+
+  case class Translucent(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Lambda {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -104,7 +106,7 @@ object Function {
   }
 
   type VarName = String
-  case class Var(name: VarName, displayType: Option[Type]) extends Function {
+  case class Var(name: VarName, displayType: Option[Type]) extends Lambda {
     val unannotatedTerm = Term.Name(name)
     val term =
       if (displayType.isEmpty) unannotatedTerm
@@ -119,7 +121,7 @@ object Function {
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
-  case class Lam(xs: List[Var], f: Function) extends Function {
+  case class Abs(xs: List[Var], f: Function) extends Lambda {
     val term = {
       val params = xs.map(x => Term.Param(List.empty, Term.Name(x.name), x.displayType, None))
 
@@ -135,13 +137,13 @@ object Function {
       }
     }
   }
-  object Lam {
+  object Abs {
     /* x: T, f: R, \x.f : T => R */
-    def apply(x: Var, f: Function): Function = Lam(List(x), f)
+    def apply(x: Var, f: Function): Function = Abs(List(x), f)
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
-  case class App(f: Function, xs: List[Function]) extends Function {
+  case class App(f: Function, xs: List[Function]) extends Lambda {
     val term = q"${f.term}(..${xs.map(_.term)})"
   }
   object App {
@@ -151,7 +153,7 @@ object Function {
   /* id : A => A */
   def id: Function = {
     val x = Var.fresh() // : A
-    Lam(x, x)
+    Abs(x, x)
   }
 
   /* flip : (A => B => C) => B => A => C */
@@ -161,7 +163,7 @@ object Function {
     val y = Var.fresh() // : A
 
     // \f -> \x -> \y -> f y x
-    Lam(f, Lam(x, Lam(y, App(App(f, y), x))))
+    Abs(f, Abs(x, Abs(y, App(App(f, y), x))))
   }
 
   /* compose : (B => C) => (A => B) => A => C */
@@ -171,7 +173,7 @@ object Function {
     val x = Var.fresh() // : A
 
     // \f -> \g -> \x -> f (g x)
-    Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
+    Abs(f, Abs(g, Abs(x, App(f, App(g, x)))))
   }
   def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
@@ -181,7 +183,7 @@ object Function {
     val xs = Var.fresh() // : List[A]
 
     // \x -> \xs -> x :: xs
-    Lam(x, Lam(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
+    Abs(x, Abs(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
   }
   def consH(x: Function, xs: Function): Function = App(App(cons, x), xs)
 }

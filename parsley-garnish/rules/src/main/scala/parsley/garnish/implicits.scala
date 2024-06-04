@@ -90,7 +90,7 @@ object implicits {
 
       val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
 
-      freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Lam(params, acc) }
+      freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Abs(params, acc) }
     }
 
     private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
@@ -111,7 +111,7 @@ object implicits {
       val params = namedParams.toList
       val defaultMap = params.map(v => v.name.toString -> v).toMap
 
-      params.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Lam(param, acc) }
+      params.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Abs(param, acc) }
     }
   }
 }

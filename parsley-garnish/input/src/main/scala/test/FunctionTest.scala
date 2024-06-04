@@ -80,14 +80,14 @@ object FunctionTest {
 
   val mapApplyMethod = pure(1).map(Two.curried.apply)
 
-  // val explicitLiftValFunc = lift2(valFunc, pure("parsley"), pure("garnish"))
-  // val explicitLiftDefFunc = lift2(defFunc, pure("parsley"), pure("garnish"))
-  // val explicitLiftDefFuncGeneric = lift2(defFuncGeneric[String, String], pure("parsley"), pure("garnish"))
-  // val explicitLiftPlaceholder = lift2((_: String) + (_: String), pure("parsley"), pure("garnish"))
+  val explicitLiftValFunc = lift2(valFunc, pure("parsley"), pure("garnish"))
+  val explicitLiftDefFunc = lift2(defFunc, pure("parsley"), pure("garnish"))
+  val explicitLiftDefFuncGeneric = lift2(defFuncGeneric[String, String], pure("parsley"), pure("garnish"))
+  val explicitLiftPlaceholder = lift2((_: String) + (_: String), pure("parsley"), pure("garnish"))
   val explicitLiftLambda = lift2((a: String, b: String) => a + b, pure("parsley"), pure("garnish"))
-  // val explicitLiftApplyMethodLambda = lift2((a: String, b: String) => TwoGeneric(a, b), pure("parsley"), pure("garnish"))
-  // val explicitLiftApplyMethodPlaceholder = lift2(Two(_, _), pure(1), pure(2))
-  // val explicitLiftApplyMethod = lift2(Two, pure(1), pure(2))
+  val explicitLiftApplyMethodLambda = lift2((a: String, b: String) => TwoGeneric(a, b), pure("parsley"), pure("garnish"))
+  val explicitLiftApplyMethodPlaceholder = lift2(Two(_, _), pure(1), pure(2))
+  val explicitLiftApplyMethod = lift2(Two, pure(1), pure(2))
 
   // val implicitLiftValFunc = valFunc.lift(pure("parsley"), pure("garnish"))
   // val implicitLiftDefFunc = defFunc.lift(pure("parsley"), pure("garnish"))
@@ -107,7 +107,7 @@ object FunctionTest {
   // val zippedApplyMethodExplicit = (pure(1), pure(2)).zipped(Two.apply)
   // val zippedApplyMethodPlaceholder = (pure(1), pure(2)).zipped(Two(_, _))
 
-  // val bridge1 = OneBridged(pure(1))
+  val bridge1 = OneBridged(pure(1))
   // val bridge2 = TwoBridged(pure(1), pure(2))
 
   /*

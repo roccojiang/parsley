@@ -3,56 +3,62 @@ package parsley.garnish.model
 import scala.meta._
 
 import Function.VarName
+import parsley.garnish.utils.Fresh
 
 sealed abstract class HOAS extends Product with Serializable {
   import HOAS._
 
-  def normalise: HOAS = {
+  def eval: HOAS = {
     // println(s"NORMALISING ${this.reify}")
-    val normalised = this match {
-      case Abs(n, f) => Abs(n, x => f(x).normalise)
-      case App(f, x) => f.whnf match {
-        case Abs(_, g) => g(x).normalise
-        case g      => App(g.normalise, x.map(_.normalise))
+    val evaluated = this match {
+      case Abs(n, tpes, f) => Abs(n, tpes, x => f(x).eval)
+      case App(f, xs) => f.whnf match {
+        case Abs(n, _, g) =>
+          require(n == xs.size)
+          g(xs).eval
+        case g         => App(g.eval, xs.map(_.eval))
       }
-      case Translucent(t, env) => Translucent(t, env.map { case (k, v) => k -> v.normalise })
+      case Translucent(t, env) => Translucent(t, env.map { case (k, v) => k -> v.eval })
       case _ => this
     }
     // println(s"\tNORMALISED ${this.reify} to ${normalised.reify}")
-    normalised
+    evaluated
   }
 
   private def whnf: HOAS = this match {
-    case App(f, x) => f.whnf match {
-      case Abs(_, g) => g(x).whnf
-      case g      => App(g, x)
+    case App(f, xs) => f.whnf match {
+      case Abs(n, _, g) =>
+        require(n == xs.size)
+        g(xs).whnf
+      case g         => App(g, xs)
     }
     case Translucent(t, env) => Translucent(t, env.map { case (k, v) => k -> v.whnf })
     case _ => this
   }
 
   def reify: Function = {
-    val reified = this match {
-      case Abs(n, f) =>
-        val params = (1 to n).map(_ => Function.Var.fresh(Some("hoas"))).toList
-        Function.Lam(params, f(params.map(x => HOAS.Var(x.name, None))).reify)
+    def reify0(func: HOAS)(implicit freshSupply: Fresh): Function = func match {
+      case Abs(n, tpes, f) =>
+        // val params = (1 to n).map(_ => Function.Var.fresh(Some("hoas"))).toList
+        val params = tpes.map(Function.Var(freshSupply.next(), _))
+        Function.Abs(params, reify0(f(params.map { case Function.Var(name, tpe) => HOAS.Var(name, tpe) } )))
       case App(f, xs) =>
-        Function.App(f.reify, xs.map(_.reify))
-      case Translucent(t, env) => Function.Translucent(t, env.map { case (v, f) => v -> f.reify })
+        Function.App(reify0(f), xs.map(reify0))
+      case Translucent(t, env) => Function.Translucent(t, env.map { case (v, f) => v -> reify0(f) })
       case Var(name, displayType) => Function.Var(name, displayType)
     }
-    // println(s"REIFIED $this to $reified")
-    reified
+
+    reify0(this)(new Fresh)
   }
 }
 
 object HOAS {
-  case class Abs(n: Int, f: List[HOAS] => HOAS) extends HOAS
+  case class Abs(n: Int, paramTypes: List[Option[Type]], f: List[HOAS] => HOAS) extends HOAS
   object Abs {
-    def apply(f: List[HOAS] => HOAS): Abs = Abs(1, f)
+    def apply(f: List[HOAS] => HOAS): Abs = Abs(1, List(None), f)
   }
 
-  case class App private (f: HOAS, xs: List[HOAS]) extends HOAS
+  case class App(f: HOAS, xs: List[HOAS]) extends HOAS
   object App {
     def apply(f: List[HOAS], xs: List[HOAS]): App = {
       assert(f.size == 1) // TODO: ew
@@ -60,7 +66,6 @@ object HOAS {
     }
   }
 
-  // TODO: this is a specialisation of Opaque (for 'unknowns'), I guess, so is this required?
   case class Var(name: VarName, displayType: Option[Type]) extends HOAS
 
   case class Translucent(t: Term, env: Map[VarName, HOAS] = Map.empty) extends HOAS
