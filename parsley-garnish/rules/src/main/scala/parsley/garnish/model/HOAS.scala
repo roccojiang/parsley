@@ -18,7 +18,7 @@ sealed abstract class HOAS extends Product with Serializable {
           g(xs).eval
         case g         => App(g.eval, xs.map(_.eval))
       }
-      case Translucent(t, env) => Translucent(t, env.map { case (k, v) => k -> v.eval })
+      case Translucent(t, env) => Translucent(t, env.view.mapValues(_.eval).toMap)
       case _ => this
     }
     // println(s"\tNORMALISED ${this.reify} to ${normalised.reify}")
@@ -32,7 +32,7 @@ sealed abstract class HOAS extends Product with Serializable {
         g(xs).whnf
       case g         => App(g, xs)
     }
-    case Translucent(t, env) => Translucent(t, env.map { case (k, v) => k -> v.whnf })
+    case Translucent(t, env) => Translucent(t, env.view.mapValues(_.whnf).toMap)
     case _ => this
   }
 
@@ -42,9 +42,8 @@ sealed abstract class HOAS extends Product with Serializable {
         // val params = (1 to n).map(_ => Function.Var.fresh(Some("hoas"))).toList
         val params = tpes.map(Function.Var(freshSupply.next(), _))
         Function.Abs(params, reify0(f(params.map { case Function.Var(name, tpe) => HOAS.Var(name, tpe) } )))
-      case App(f, xs) =>
-        Function.App(reify0(f), xs.map(reify0))
-      case Translucent(t, env) => Function.Translucent(t, env.map { case (v, f) => v -> reify0(f) })
+      case App(f, xs) => Function.App(reify0(f), xs.map(reify0))
+      case Translucent(t, env) => Function.Translucent(t, env.view.mapValues(reify0).toMap)
       case Var(name, displayType) => Function.Var(name, displayType)
     }
 

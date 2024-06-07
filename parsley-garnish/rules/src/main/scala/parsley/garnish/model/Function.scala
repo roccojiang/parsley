@@ -9,7 +9,10 @@ sealed abstract class Function extends Product with Serializable {
 
   def isEquivalent(other: Function): Boolean = this.reflect.reify == other.reflect.reify
 
-  def normalise: Function = this.reflect.eval.reify
+  def normalise: Function = {
+    println(s">>NORMALISING>> $this")
+    this.reflect.eval.reify
+  }
   // {
   //   println(s"1) NORMALISING $this")
   //   val reflected = this.reflect
@@ -30,7 +33,7 @@ sealed abstract class Function extends Product with Serializable {
       case App(f, xs) =>
         HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
       case Translucent(term, env) =>
-        HOAS.Translucent(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
+        HOAS.Translucent(term, env.view.mapValues(reflect0(_, boundVars)).toMap)
     }
    
     reflect0(this, Map.empty)
