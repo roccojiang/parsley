@@ -85,7 +85,7 @@ object implicits {
       // Substitute the fresh variables into the function body
       // Comparison using symbols negates scoping problems
       val updatedBody = body.transform {
-        case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).unannotatedTerm
+        case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).term
       }.asInstanceOf[Term]
 
       val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
@@ -101,17 +101,17 @@ object implicits {
         case Term.Ascribe(Term.Placeholder(), tpe) =>
           val namedParam = Var.fresh(Some("_p"), Some(tpe))
           namedParams += namedParam
-          namedParam.unannotatedTerm
+          namedParam.term
         case _: Term.Placeholder =>
           val namedParam = Var.fresh(Some("_p"), None)
           namedParams += namedParam
-          namedParam.unannotatedTerm
+          namedParam.term
       }.asInstanceOf[Term]
 
       val params = namedParams.toList
       val defaultMap = params.map(v => v.name.toString -> v).toMap
 
-      params.foldRight[Function](Translucent(transformedFunc, defaultMap)) { (param, acc) => Abs(param, acc) }
+      Abs(params, Translucent(transformedFunc, defaultMap))
     }
   }
 }
