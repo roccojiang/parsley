@@ -7,85 +7,34 @@ sealed abstract class Function extends Product with Serializable {
 
   def term: Term
 
-  def isEquivalent(other: Function): Boolean = this.reflect.reify == other.reflect.reify
+  def isEquivalent(other: Function): Boolean = this.evaluate.reify == other.evaluate.reify
 
-  def normalise: Function = this.reflect.normalise.reify
-  // {
-  //   println(s"1) NORMALISING $this")
-  //   val reflected = this.reflect
-  //   println(s"2) REFLECTED TO ${reflected}")
-  //   val normalised = reflected.normalise
-  //   println(s"3) NORMALISED TO $normalised")
-  //   val reified = normalised.reify
-  //   println(s"4) REIFIED TO $reified")
-  //   reified
-  // }
+  def normalise: Function = this.evaluate.reify
 
-  def reflect: HOAS = {
-    def reflect0(func: Function, boundVars: Map[Var, HOAS]): HOAS = func match {
+  private def evaluate: Sem = {
+    def eval(func: Function, boundVars: Map[Var, Sem]): Sem = func match {
       case v @ Var(name, displayType) =>
-        boundVars.getOrElse(v, HOAS.Var(name, displayType))
-      case Lam(xs, f) =>
-        HOAS.Abs(xs.size, vs => reflect0(f, boundVars ++ xs.zip(vs)))
-      case App(f, xs) =>
-        HOAS.App(reflect0(f, boundVars), xs.map(reflect0(_, boundVars)))
+        boundVars.getOrElse(v, Sem.Var(name, displayType))
+      case Abs(xs, f) =>
+        Sem.Abs(xs.map(_.displayType), vs => eval(f, boundVars ++ xs.zip(vs)))
+      case App(f, xs) => eval(f, boundVars) match {
+        case Sem.Abs(_, g) => g(xs.map(eval(_, boundVars)))
+        case g => Sem.App(g, xs.map(eval(_, boundVars)))
+      }
       case Translucent(term, env) =>
-        HOAS.Translucent(term, env.map { case (v, func) => v -> reflect0(func, boundVars) })
+        Sem.Translucent(term, env.view.mapValues(eval(_, boundVars)).toMap)
     }
-   
-    reflect0(this, Map.empty)
+
+    eval(this, Map.empty)
   }
 
-  // TODO: remove this - old normalisation by substitution approach
-  /*
-  def normalise: Function = if (this.normal) this else this.reduce
-
-  // Barendregt's convention is enforced
-  def substitute(x: Var, y: Function): Function = this match {
-    case Var(name, _) if name == x.name => y
-    case Lam(xs, f) => Lam(xs, f.substitute(x, y))
-    case App(f, xs @ _*) => App(f.substitute(x, y), xs.map(_.substitute(x, y)): _*)
-    case Translucent(t, env) =>
-      Translucent(t, env.map { case (v, f) => (v, f.substitute(x, y)) } + (x.name -> y))
-    case _ => this
-  }
-
-  def reduce: Function = this match {
-    // Beta reduction rule
-    case App(Lam(xs, f), ys @ _*) =>
-      assert(xs.length == ys.length, "Incorrect number of arguments")
-      xs.zip(ys).foldRight(f) { case ((x, y), acc) => acc.substitute(x, y) }.reduce
-
-    case App(f, xs @ _*) => f.reduce match {
-      case g: Lam => App(g, xs.map(_.reduce): _*).reduce
-      case g => App(g, xs.map(_.reduce): _*)
-    }
-    case Lam(xs, f) => Lam(xs, f.reduce)
-
-    case Translucent(t, substs) => Translucent(t, substs.map { case (x, y) => x -> y.reduce })
-
-    case _ => this
-  }
-
-  private def normal: Boolean = this match {
-    case App(Lam(_, _), _*) => false
-    case App(f, xs @ _*) => f.normal && xs.forall(_.normal)
-    case Translucent(_, substs) => substs.values.forall(_.normal)
-    case _ => true
-  }
-  */
-
-  // override def toString: String = term.syntax
-  // override def toString: String = this match {
-  //   case Opaque(t, _) => s"${Console.RED}${t.syntax}${Console.RESET}"
-  //   case App(f, xs @ _*) => s"(${f.toString})${Console.BLUE}(${xs.map(_.toString).mkString(", ")})${Console.RESET}"
-  //   case Var(name, tpe) => name + (if (tpe.nonEmpty) s": ${tpe.get}" else "")
-  //   case Lam(xs, f) => s"${Console.GREEN}\\(${xs.map(_.term.syntax).mkString(", ")}) -> ${f.toString}${Console.RESET}"
-  // }
+  override def toString: String = term.syntax
 }
 
 object Function {
-  case class Translucent(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Function {
+  sealed trait Lambda extends Function
+
+  case class Translucent(originalTerm: Term, env: Map[VarName, Function] = Map.empty) extends Lambda {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -104,11 +53,8 @@ object Function {
   }
 
   type VarName = String
-  case class Var(name: VarName, displayType: Option[Type]) extends Function {
-    val unannotatedTerm = Term.Name(name)
-    val term =
-      if (displayType.isEmpty) unannotatedTerm
-      else q"$unannotatedTerm: ${displayType.get}"
+  case class Var(name: VarName, displayType: Option[Type]) extends Lambda {
+    val term = Term.Name(name)
   }
 
   object Var {
@@ -119,29 +65,20 @@ object Function {
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
-  case class Lam(xs: List[Var], f: Function) extends Function {
+  case class Abs(xs: List[Var], f: Function) extends Lambda {
     val term = {
+      // Vars are only annotated with their types in this position
       val params = xs.map(x => Term.Param(List.empty, Term.Name(x.name), x.displayType, None))
-
-      f match {
-        // TODO: this breaks things for a few edge cases, so disabled for now
-        // Syntactic sugar: transform single parameter lambdas to use placeholder syntax
-        // case Opaque(t) if params.size == 1 =>
-        //   t.transform {
-        //     case v: Term.Name if v.isEqual(xs.head.name) => Term.Placeholder()
-        // }.asInstanceOf[Term]
-        
-        case _ => q"(..$params) => ${f.term}"
-      }
+      q"(..$params) => ${f.term}" // TODO: possible to introduce placeholder syntax / eta reduce?
     }
   }
-  object Lam {
+  object Abs {
     /* x: T, f: R, \x.f : T => R */
-    def apply(x: Var, f: Function): Function = Lam(List(x), f)
+    def apply(x: Var, f: Function): Function = Abs(List(x), f)
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
-  case class App(f: Function, xs: List[Function]) extends Function {
+  case class App(f: Function, xs: List[Function]) extends Lambda {
     val term = q"${f.term}(..${xs.map(_.term)})"
   }
   object App {
@@ -151,7 +88,7 @@ object Function {
   /* id : A => A */
   def id: Function = {
     val x = Var.fresh() // : A
-    Lam(x, x)
+    Abs(x, x)
   }
 
   /* flip : (A => B => C) => B => A => C */
@@ -161,7 +98,7 @@ object Function {
     val y = Var.fresh() // : A
 
     // \f -> \x -> \y -> f y x
-    Lam(f, Lam(x, Lam(y, App(App(f, y), x))))
+    Abs(f, Abs(x, Abs(y, App(App(f, y), x))))
   }
 
   /* compose : (B => C) => (A => B) => A => C */
@@ -171,7 +108,7 @@ object Function {
     val x = Var.fresh() // : A
 
     // \f -> \g -> \x -> f (g x)
-    Lam(f, Lam(g, Lam(x, App(f, App(g, x)))))
+    Abs(f, Abs(g, Abs(x, App(f, App(g, x)))))
   }
   def composeH(f: Function /* B => C */): Function /* (A => B) => A => C) */ = App(compose, f)
   def composeH(f: Function /* B => C */ , g: Function /* A => B */): Function /* A => C */ = App(App(compose, f), g)
@@ -181,7 +118,44 @@ object Function {
     val xs = Var.fresh() // : List[A]
 
     // \x -> \xs -> x :: xs
-    Lam(x, Lam(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
+    Abs(x, Abs(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
   }
   def consH(x: Function, xs: Function): Function = App(App(cons, x), xs)
+}
+
+private sealed abstract class Sem extends Product with Serializable {
+  import parsley.garnish.utils.Fresh
+  import Sem._
+
+  def reify: Function = {
+    def reify0(func: Sem)(implicit freshSupply: Fresh): Function = func match {
+      case Abs(tpes, f) =>
+        val params = tpes.map(Function.Var(freshSupply.next(), _))
+        Function.Abs(params, reify0(f(params.map { case Function.Var(name, tpe) => Sem.Var(name, tpe) } )))
+      case App(f, xs) => Function.App(reify0(f), xs.map(reify0))
+      case Translucent(t, env) => Function.Translucent(t, env.view.mapValues(reify0).toMap)
+      case Var(name, displayType) => Function.Var(name, displayType)
+    }
+
+    reify0(this)(new Fresh)
+  }
+}
+
+private object Sem {
+  case class Abs(paramTypes: List[Option[Type]], f: List[Sem] => Sem) extends Sem
+  object Abs {
+    def apply(f: List[Sem] => Sem): Abs = Abs(List(None), f)
+  }
+
+  case class App(f: Sem, xs: List[Sem]) extends Sem
+  object App {
+    def apply(f: List[Sem], xs: List[Sem]): App = {
+      assert(f.size == 1)
+      App(f.head, xs)
+    }
+  }
+
+  case class Var(name: Function.VarName, displayType: Option[Type]) extends Sem
+
+  case class Translucent(t: Term, env: Map[Function.VarName, Sem] = Map.empty) extends Sem
 }

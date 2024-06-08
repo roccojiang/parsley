@@ -45,14 +45,9 @@ object FunctionTest {
   val mapDefFunc = pure(defFuncCurried("parsley"))
   val mapDefFuncGeneric = pure(defFuncGenericCurried("parsley"))
 
-  /* 
-  LIKELY WONT DO: it seems impossible to find the type of placeholder variables
-  TODO: But we can at least get the shape of the function
-  */
   val mapPlaceholder = pure("parsley" + "garnish")
 
   /*
-  TODO: is this any different from how it would work for x => One(x.length)? Don't think so
   We can find the type of each argument via its signature
   And the return type possibly via synthetics on the .map term?
   Also possible to get signature from symbol of method body, if the types are concrete
@@ -60,7 +55,6 @@ object FunctionTest {
   */
   val mapLambda = pure("parsley".toInt + 12)
 
-  // TODO: standard anonymous functions (i.e. lambdas) - Term.Function(ParamClause(params), body)
   // get argument types from ParamClause
   // recursively descend into body, in case the function is curried
   // get return type from final body
@@ -68,23 +62,25 @@ object FunctionTest {
 
   // I the below should end up parsed like \x -> \y -> OPAQUE(One(x.length + y))
   // it's NOT worth trying to turn the body of the lambda into our Function representation
-  val mapApplyMethodLambdaCurried = pure("parsley").map(x => (y: Int) => One(x.length + y))
+  val mapApplyMethodLambdaCurried = pure((x1: Int) => One("parsley".length + x1))
 
-  // TODO: Need to have some sort of traversal through and convert this to a lambda
   // This is a Term.AnonymousFunction(...)
   val mapApplyMethodPlaceholder = pure(OneGeneric("parsley"))
-  val mapApplyMethodPlaceholderLabelledType = pure(OneGeneric("parsley": String))
+  val mapApplyMethodPlaceholderLabelledType = pure(OneGeneric("parsley"))
 
   val mapApplyMethod = pure(Two.curried.apply(1))
 
-  // val explicitLiftValFunc = lift2(valFunc, pure("parsley"), pure("garnish"))
-  // val explicitLiftDefFunc = lift2(defFunc, pure("parsley"), pure("garnish"))
-  // val explicitLiftDefFuncGeneric = lift2(defFuncGeneric[String, String], pure("parsley"), pure("garnish"))
-  // val explicitLiftPlaceholder = lift2((_: String) + (_: String), pure("parsley"), pure("garnish"))
-  val explicitLiftLambda = lift2((a: String, b: String) => a + b, pure("parsley"), pure("garnish"))
-  // val explicitLiftApplyMethodLambda = lift2((a: String, b: String) => TwoGeneric(a, b), pure("parsley"), pure("garnish"))
-  // val explicitLiftApplyMethodPlaceholder = lift2(Two(_, _), pure(1), pure(2))
-  // val explicitLiftApplyMethod = lift2(Two, pure(1), pure(2))
+  val explicitLiftValFunc = lift2(valFunc, pure("parsley"), pure("garnish"))
+  val explicitLiftDefFunc = lift2(defFunc, pure("parsley"), pure("garnish"))
+  val explicitLiftDefFuncGeneric = lift2(defFuncGeneric[String, String], pure("parsley"), pure("garnish"))
+
+  // TODO: don't change if alpha-equivalent
+  val explicitLiftPlaceholder = lift2((x1: String, x2: String) => x1 + x2, pure("parsley"), pure("garnish"))
+  val explicitLiftLambda = lift2((x1: String, x2: String) => x1 + x2, pure("parsley"), pure("garnish"))
+  val explicitLiftApplyMethodLambda = lift2((x1: String, x2: String) => TwoGeneric(x1, x2), pure("parsley"), pure("garnish"))
+  val explicitLiftApplyMethodPlaceholder = lift2((x1, x2) => Two(x1, x2), pure(1), pure(2))
+
+  val explicitLiftApplyMethod = lift2(Two, pure(1), pure(2))
 
   // val implicitLiftValFunc = valFunc.lift(pure("parsley"), pure("garnish"))
   // val implicitLiftDefFunc = defFunc.lift(pure("parsley"), pure("garnish"))
@@ -104,7 +100,7 @@ object FunctionTest {
   // val zippedApplyMethodExplicit = (pure(1), pure(2)).zipped(Two.apply)
   // val zippedApplyMethodPlaceholder = (pure(1), pure(2)).zipped(Two(_, _))
 
-  // val bridge1 = OneBridged(pure(1))
+  val bridge1 = OneBridged(pure(1))
   // val bridge2 = TwoBridged(pure(1), pure(2))
 
   /*
