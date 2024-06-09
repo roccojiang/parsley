@@ -4,7 +4,7 @@ import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
-import Function._
+import Expr._
 import parsley.garnish.implicits.TermOps
 import parsley.garnish.analysis.ParserTransformer.ParserDefinition
 import parsley.garnish.utils.TypeUtils.getParsleyType
@@ -28,11 +28,11 @@ sealed abstract class Parser extends Product with Serializable {
     case Choice(Pure(f), _) => Pure(f)
 
     // empty <*> u == empty
-    case Ap(Empty, _) => Empty
+    case Empty <*> _ => Empty
     // pure(f) <*> pure(x) == pure(f(x))
-    case Ap(Pure(f), Pure(x)) => Pure(App(f, x))
+    case Pure(f) <*> Pure(x) => Pure(App(f, x))
     // pure(f) <*> x == x.map(f)
-    case Ap(Pure(f), x) => FMap(x, f)
+    case Pure(f) <*> x => FMap(x, f)
 
     // empty.map(f) == empty  [proof in report appendix]
     case FMap(Empty, _) => Empty
@@ -46,18 +46,18 @@ sealed abstract class Parser extends Product with Serializable {
   private[garnish] def resugar: Parser = this.rewrite {
     // p.map(\x -> \y -> y) <*> q == p ~> q
     // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
-    case Ap(FMap(p, Abs(_, Abs(Var(y, _) :: Nil, Var(z, _)))), q) if y == z => Then(p, q)
+    case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => Then(p, q)
     // p.map(\x -> \y -> x) <*> q == p <~ q
-    case Ap(FMap(p, Abs(Var(x, _) :: Nil, Abs(_, Var(z, _)))), q) if x == z => ThenDiscard(p, q)
+    case FMap(p, Abs(Var(x, _), Abs(_, Var(z, _)))) <*> q if (x == z) => ThenDiscard(p, q)
 
     // f.curried.map(p) <*> q == (p, q).zipped(f)
     // TODO: up to 22 args
-    case Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, body))), p2) =>
-      Zipped(Abs(List(x1, x2), body), List(p1, p2))
-    case Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, body)))), p2), p3) =>
-      Zipped(Abs(List(x1, x2, x3), body), List(p1, p2, p3))
-    case Ap(Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, Abs(x4 :: Nil, body))))), p2), p3), p4) =>
-      Zipped(Abs(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
+    case FMap(p1, Abs(x1, Abs(x2, body))) <*> p2 =>
+      Zipped(AbsN(List(x1, x2), body), List(p1, p2))
+    case FMap(p1, Abs(x1, Abs(x2, Abs(x3, body)))) <*> p2 <*> p3 =>
+      Zipped(AbsN(List(x1, x2, x3), body), List(p1, p2, p3))
+    case FMap(p1, Abs(x1, Abs(x2, Abs(x3, Abs(x4, body))))) <*> p2 <*> p3 <*> p4 =>
+      Zipped(AbsN(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
   }.transform {
     // Rules that should only be applied once, since the RHS constructors overlap with LHS constructors
     // If applied using rewrite, it would never terminate
@@ -79,7 +79,8 @@ sealed abstract class Parser extends Product with Serializable {
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
     val p = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
-      case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
+      case p <*> q => <*>(p.transform(pf), q.transform(pf))
+      // case <*>(p, q) => <*>(p.transform(pf), q.transform(pf))
       case Then(p, q) => Then(p.transform(pf), q.transform(pf))
       case ThenDiscard(p, q) => ThenDiscard(p.transform(pf), q.transform(pf))
       case FMap(p, f) => FMap(p.transform(pf), f)
@@ -114,7 +115,7 @@ sealed abstract class Parser extends Product with Serializable {
 object Parser {
 
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
-  case class UnfoldedParser(empty: Option[Function], nonLeftRec: Parser, leftRec: Parser)
+  case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser)
 
   final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName)
@@ -144,7 +145,7 @@ object Parser {
   }
 
   /* x: A, pure(x): Parser[A] */
-  final case class Pure(x: Function) extends Parser {
+  final case class Pure(x: Expr) extends Parser {
     val term = q"pure(${x.term})"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -197,7 +198,7 @@ object Parser {
   }
 
   /* p: Parser[A => B], q: Parser[A], p <*> q: Parser[B] */
-  final case class Ap(p: Parser, q: Parser) extends Parser {
+  final case class <*>(p: Parser, q: Parser) extends Parser {
     val term = q"${p.term} <*> ${q.term}"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -223,12 +224,12 @@ object Parser {
       UnfoldedParser(empty, nonLefts, lefts)
     }
   }
-  object Ap {
+  object <*> {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
 
-    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Ap] = {
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, <*>] = {
       case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
-        Ap(p.toParser, q.toParser)
+        <*>(p.toParser, q.toParser)
     }
   }
 
@@ -275,7 +276,7 @@ object Parser {
   }
 
   /* p: Parser[A], f: Func[A => B], p.map(f): Parser[B] */
-  final case class FMap(p: Parser, f: Function) extends Parser {
+  final case class FMap(p: Parser, f: Expr) extends Parser {
     val term = q"${p.term}.map(${f.term})"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -371,7 +372,7 @@ object Parser {
 
   /* f: (T1, T2, ..., TN) => R, pN: Parser[TN], f.lift(ps) : Parser[R] */
   sealed trait LiftLike extends Parser {
-    def func: Function
+    def func: Expr
     def parsers: List[Parser]
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -385,7 +386,7 @@ object Parser {
     }
   }
 
-  final case class LiftImplicit(func: Function, parsers: List[Parser]) extends LiftLike {
+  final case class LiftImplicit(func: Expr, parsers: List[Parser]) extends LiftLike {
     val term = q"${func.term}.lift(..${parsers.map(_.term)})"
   }
   object LiftImplicit {
@@ -405,7 +406,7 @@ object Parser {
     }
   }
 
-  final case class LiftExplicit(func: Function, parsers: List[Parser]) extends LiftLike {
+  final case class LiftExplicit(func: Expr, parsers: List[Parser]) extends LiftLike {
     val term = {
       val liftN = Term.Name(s"lift${parsers.length}")
       q"$liftN(${func.term}, ..${parsers.map(_.term)})"
@@ -422,7 +423,7 @@ object Parser {
     }
   }
 
-  final case class Zipped(func: Function, parsers: List[Parser]) extends LiftLike {
+  final case class Zipped(func: Expr, parsers: List[Parser]) extends LiftLike {
     val term = q"(..${parsers.map(_.term)}).zipped(${func.term})"
   }
   object Zipped {
@@ -438,7 +439,7 @@ object Parser {
     }
   }
 
-  final case class Bridge(func: Function, parsers: List[Parser]) extends LiftLike {
+  final case class Bridge(func: Expr, parsers: List[Parser]) extends LiftLike {
     val term = q"${func.term}(..${parsers.map(_.term)})"
   }
   object Bridge {
@@ -463,8 +464,8 @@ object Parser {
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
-    def <*>(q: Parser): Parser = Ap(p, q)
+    def <*>(q: Parser): Parser = new <*>(p, q)
     def <|>(q: Parser): Parser = Choice(p, q)
-    def map(f: Function): Parser = FMap(p, f)
+    def map(f: Expr): Parser = FMap(p, f)
   }
 }

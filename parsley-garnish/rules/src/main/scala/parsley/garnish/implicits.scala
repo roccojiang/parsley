@@ -16,9 +16,9 @@ object implicits {
   }
 
   implicit class TermOps(private val term: Term) extends AnyVal {
-    import model.{Function, Parser}, Function._, Parser._
+    import model.{Expr, Parser}, Expr._, Parser._
 
-    def toFunction(debugName: String)(implicit doc: SemanticDocument): Function = {
+    def toFunction(debugName: String)(implicit doc: SemanticDocument): Expr = {
       // parsley.garnish.utils.printInfo(term, debugName)
       // println(s"BUILDING FUNCTION FROM TERM: $term")
 
@@ -37,7 +37,7 @@ object implicits {
         Pure.fromTerm,
         Empty.fromTerm,
         Choice.fromTerm,
-        Ap.fromTerm,
+        <*>.fromTerm,
         Then.fromTerm,
         ThenDiscard.fromTerm,
         FMap.fromTerm,
@@ -63,7 +63,7 @@ object implicits {
       }
     }
 
-    private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Function = {
+    private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Expr = {
       type ParameterLists = List[List[Term.Param]]
 
       @annotation.tailrec
@@ -93,10 +93,10 @@ object implicits {
         case _ => Translucent(updatedBody, defaultMap)  
       }
 
-      freshParams.foldRight[Function](lambdaBody) { (params, acc) => Abs(params, acc) }
+      freshParams.foldRight[Expr](lambdaBody) { (params, acc) => AbsN(params, acc) }
     }
 
-    private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
+    private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Expr = {
       val namedParams = mutable.ListBuffer.empty[Var]
 
       // This assumes an in-order traversal, although I'm not aware if this is guaranteed
@@ -119,7 +119,7 @@ object implicits {
         case _ => Translucent(transformedBody, defaultMap)  
       }
 
-      Abs(params, lambdaBody)
+      AbsN(params, lambdaBody)
     }
   }
 }
