@@ -20,24 +20,18 @@ sealed abstract class Parser extends Product with Serializable {
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
-    // p <|> empty == p
-    case Choice(p, Empty) => p
-    // empty <|> q == q
-    case Choice(Empty, q) => q
-    // pure(f) <|> u == pure(f)
-    case Choice(Pure(f), _) => Pure(f)
+    case p <|> Empty         => p
+    case Empty <|> q         => q
+    case Pure(f) <|> _       => Pure(f)
 
-    // empty <*> u == empty
-    case Empty <*> _ => Empty
-    // pure(f) <*> pure(x) == pure(f(x))
+    case Empty <*> _         => Empty
     case Pure(f) <*> Pure(x) => Pure(App(f, x))
-    // pure(f) <*> x == x.map(f)
-    case Pure(f) <*> x => FMap(x, f)
+    case Pure(f) <*> x       => FMap(x, f)
 
     // empty.map(f) == empty  [proof in report appendix]
-    case FMap(Empty, _) => Empty
+    case FMap(Empty, _)      => Empty
     // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
-    case FMap(Pure(x), f) => Pure(App(f, x))
+    case FMap(Pure(x), f)    => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
   }
@@ -46,7 +40,7 @@ sealed abstract class Parser extends Product with Serializable {
   private[garnish] def resugar: Parser = this.rewrite {
     // p.map(\x -> \y -> y) <*> q == p ~> q
     // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
-    case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => Then(p, q)
+    case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => p ~> q
     // p.map(\x -> \y -> x) <*> q == p <~ q
     case FMap(p, Abs(Var(x, _), Abs(_, Var(z, _)))) <*> q if (x == z) => ThenDiscard(p, q)
 
@@ -78,10 +72,9 @@ sealed abstract class Parser extends Product with Serializable {
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
     val p = this match {
-      case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
-      case p <*> q => <*>(p.transform(pf), q.transform(pf))
-      // case <*>(p, q) => <*>(p.transform(pf), q.transform(pf))
-      case Then(p, q) => Then(p.transform(pf), q.transform(pf))
+      case Choice(p, q) => p.transform(pf) <|> q.transform(pf)
+      case Ap(p, q) => p.transform(pf) <*> q.transform(pf)
+      case Then(p, q) => p.transform(pf) ~> q.transform(pf)
       case ThenDiscard(p, q) => ThenDiscard(p.transform(pf), q.transform(pf))
       case FMap(p, f) => FMap(p.transform(pf), f)
       case Many(p) => Many(p.transform(pf))
@@ -196,9 +189,12 @@ object Parser {
         Choice(p.toParser, q.toParser)
     }
   }
+  object <|> {
+    def unapply(parser: Choice): Option[(Parser, Parser)] = Some((parser.p, parser.q))
+  }
 
   /* p: Parser[A => B], q: Parser[A], p <*> q: Parser[B] */
-  final case class <*>(p: Parser, q: Parser) extends Parser {
+  final case class Ap(p: Parser, q: Parser) extends Parser {
     val term = q"${p.term} <*> ${q.term}"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
@@ -224,13 +220,16 @@ object Parser {
       UnfoldedParser(empty, nonLefts, lefts)
     }
   }
-  object <*> {
+  object Ap {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
 
-    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, <*>] = {
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Ap] = {
       case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
-        <*>(p.toParser, q.toParser)
+        Ap(p.toParser, q.toParser)
     }
+  }
+  object <*> {
+    def unapply(parser: Ap): Option[(Parser, Parser)] = Some((parser.p, parser.q))
   }
 
   final case class Then(p: Parser, q: Parser) extends Parser {
@@ -253,6 +252,9 @@ object Parser {
         Then(p.toParser, q.toParser)
     }
   }
+  object ~> {
+    def unapply(parser: Then): Option[(Parser, Parser)] = Some((parser.p, parser.q))
+  }
 
   final case class ThenDiscard(p: Parser, q: Parser) extends Parser {
     val term = q"${p.term} <~ ${q.term}"
@@ -273,6 +275,9 @@ object Parser {
       case Term.ApplyInfix.After_4_6_0(p, matcher(_), _, Term.ArgClause(List(q), _)) =>
         ThenDiscard(p.toParser, q.toParser)
     }
+  }
+  object <~ {
+    def unapply(parser: ThenDiscard): Option[(Parser, Parser)] = Some((parser.p, parser.q))
   }
 
   /* p: Parser[A], f: Func[A => B], p.map(f): Parser[B] */
@@ -464,7 +469,9 @@ object Parser {
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {
-    def <*>(q: Parser): Parser = new <*>(p, q)
+    def <*>(q: Parser): Parser = Ap(p, q)
+    def ~>(q: Parser): Parser = Then(p, q)
+    def <~(q: Parser): Parser = ThenDiscard(p, q)
     def <|>(q: Parser): Parser = Choice(p, q)
     def map(f: Expr): Parser = FMap(p, f)
   }

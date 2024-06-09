@@ -76,7 +76,7 @@ object Expr {
     /* x: T, f: R, \x.f : T => R */
     def apply(x: Var, f: Expr): Expr = AbsN(List(x), f)
 
-    def unapply(abs: AbsN): Option[(Var, Expr)] = abs match {
+    def unapply(func: AbsN): Option[(Var, Expr)] = func match {
       case AbsN(List(x), f) => Some((x, f))
       case _ => None
     }
