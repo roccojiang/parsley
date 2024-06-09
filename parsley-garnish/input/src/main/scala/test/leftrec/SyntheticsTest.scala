@@ -1,5 +1,5 @@
 /*
-rule = SimplifyComplexParsers
+rule = SimplifyParser
  */
 package test.leftrec
 

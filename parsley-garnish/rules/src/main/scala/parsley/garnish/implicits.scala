@@ -19,9 +19,8 @@ object implicits {
     import model.{Function, Parser}, Function._, Parser._
 
     def toFunction(debugName: String)(implicit doc: SemanticDocument): Function = {
-      parsley.garnish.utils.printInfo(term, debugName)
-
-      println(s"BUILDING FUNCTION FROM TERM: $term")
+      // parsley.garnish.utils.printInfo(term, debugName)
+      // println(s"BUILDING FUNCTION FROM TERM: $term")
 
       val func = term match {
         case f: Term.Function => buildFromFunctionTerm(f)
@@ -29,7 +28,7 @@ object implicits {
         case _ => Translucent(term)
       }
 
-      println(s"\t RESULTFUNC: $func")
+      // println(s"\t RESULTFUNC: $func")
       func
     }
 
@@ -87,17 +86,21 @@ object implicits {
       val updatedBody = body.transform {
         case t: Term.Name if symbolsMap contains t.symbol => symbolsMap(t.symbol).term
       }.asInstanceOf[Term]
-
       val defaultMap = freshParams.flatten.map(v => v.name.toString -> v).toMap
 
-      freshParams.foldRight[Function](Translucent(updatedBody, defaultMap)) { (params, acc) => Abs(params, acc) }
+      val lambdaBody = updatedBody match {
+        case Term.Name(name) => Var(name, defaultMap.get(name).flatMap(_.displayType))
+        case _ => Translucent(updatedBody, defaultMap)  
+      }
+
+      freshParams.foldRight[Function](lambdaBody) { (params, acc) => Abs(params, acc) }
     }
 
     private def buildFromAnonFunctionTerm(func: Term.AnonymousFunction): Function = {
       val namedParams = mutable.ListBuffer.empty[Var]
 
       // This assumes an in-order traversal, although I'm not aware if this is guaranteed
-      val transformedFunc = func.transform {
+      val transformedBody = func.transform {
         case Term.Ascribe(Term.Placeholder(), tpe) =>
           val namedParam = Var.fresh(Some("_p"), Some(tpe))
           namedParams += namedParam
@@ -111,7 +114,12 @@ object implicits {
       val params = namedParams.toList
       val defaultMap = params.map(v => v.name.toString -> v).toMap
 
-      Abs(params, Translucent(transformedFunc, defaultMap))
+      val lambdaBody = transformedBody match {
+        case Term.Name(name) => Var(name, defaultMap.get(name).flatMap(_.displayType))
+        case _ => Translucent(transformedBody, defaultMap)  
+      }
+
+      Abs(params, lambdaBody)
     }
   }
 }

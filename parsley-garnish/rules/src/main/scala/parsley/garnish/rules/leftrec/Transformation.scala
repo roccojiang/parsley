@@ -8,7 +8,7 @@ import parsley.garnish.analysis.ParserTransformer.{getNonTerminalParserDefns, Pa
 import parsley.garnish.model.Parser, Parser._
 
 object Transformation {
-  def removeLeftRecursion(implicit doc: SemanticDocument): Patch = {
+  def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
     val nonTerminals = getNonTerminalParserDefns.map { parserDefn =>
       parserDefn.name.symbol -> parserDefn
     }.to(mutable.Map)
@@ -36,15 +36,15 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    leftRec.simplify match {
+    leftRec.prettify match {
       case Empty => None
       // case Pure(_) => None  // TODO: special case: report infinite loop which couldn't be left factored -- should this be looking for any parser which can parse empty?
       // TODO: import postfix if not in scope
       // TODO: report can't left factor if there are impure parsers
       case leftRec =>
-        // println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
+        println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
         // println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
-        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).simplify)
+        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).prettify)
     }
   }
 

@@ -16,7 +16,10 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def simplify: Parser = this.rewrite {
+  def prettify: Parser = this.simplify.normaliseFunctions.resugar
+
+  /* Simplification via parser laws */
+  private[garnish] def simplify: Parser = this.rewrite {
     // p <|> empty == p
     case Choice(p, Empty) => p
     // empty <|> q == q
@@ -37,24 +40,33 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(Pure(x), f) => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
     case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
+  }
 
+  /* Resugar parsers that may have been desugared */
+  private[garnish] def resugar: Parser = this.rewrite {
     // p.map(\x -> \y -> y) <*> q == p ~> q
-    case Ap(FMap(p, Abs(_, Abs(y :: Nil, z))), q) if y == z => Then(p, q)
+    // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
+    case Ap(FMap(p, Abs(_, Abs(Var(y, _) :: Nil, Var(z, _)))), q) if y == z => Then(p, q)
     // p.map(\x -> \y -> x) <*> q == p <~ q
-    case Ap(FMap(p, Abs(x :: Nil, Abs(_, z))), q) if x == z => ThenDiscard(p, q)
+    case Ap(FMap(p, Abs(Var(x, _) :: Nil, Abs(_, Var(z, _)))), q) if x == z => ThenDiscard(p, q)
 
     // f.curried.map(p) <*> q == (p, q).zipped(f)
+    // TODO: up to 22 args
     case Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, body))), p2) =>
       Zipped(Abs(List(x1, x2), body), List(p1, p2))
     case Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, body)))), p2), p3) =>
       Zipped(Abs(List(x1, x2, x3), body), List(p1, p2, p3))
     case Ap(Ap(Ap(FMap(p1, Abs(x1 :: Nil, Abs(x2 :: Nil, Abs(x3 :: Nil, Abs(x4 :: Nil, body))))), p2), p3), p4) =>
       Zipped(Abs(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
-    // TODO: up to 22
+  }.transform {
+    // Rules that should only be applied once, since the RHS constructors overlap with LHS constructors
+    // If applied using rewrite, it would never terminate
 
-  }.simplifyFunctions
+    // Scala 2 cannot resolve implicit stringLift on "s".map(f)
+    case FMap(Str(s, _), f) => FMap(Str(s, implicitSyntax = false), f)
+  }
 
-  private def simplifyFunctions: Parser = this.transform {
+  private[garnish] def normaliseFunctions: Parser = this.transform {
     case Pure(f) => Pure(f.normalise)
     case FMap(p, f) => FMap(p, f.normalise)
     case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
@@ -121,7 +133,7 @@ object Parser {
         } else {
           val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
 
-          if (unfoldedRef.leftRec.simplify == Empty)
+          if (unfoldedRef.leftRec.prettify == Empty)
             // The non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly
             UnfoldedParser(None, NonTerminal(ref), Empty)
           else

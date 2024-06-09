@@ -15,7 +15,7 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   override def fix(implicit doc: SemanticDocument): Patch = {
-    val leftRecFactoringPatches = removeLeftRecursion
+    val leftRecFactoringPatches = removeLeftRecursion()
     leftRecFactoringPatches + (if (config.reportNonTerminalLocations) lintNonTerminalLocations else Patch.empty)
   }
 

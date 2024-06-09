@@ -28,7 +28,7 @@ sealed abstract class Function extends Product with Serializable {
     eval(this, Map.empty)
   }
 
-  override def toString: String = term.syntax
+  // override def toString: String = term.syntax
 }
 
 object Function {

@@ -23,6 +23,7 @@ object ExprTest {
   val number = digit.foldLeft1(0)(((n, d) => n * 10 + d.asDigit))
   // TODO: fix compilation issues with expr, term
   lazy val expr: Parsley[Expr] = chain.postfix[Expr](term)((char('+') ~> term).map(hoas611 => hoas612 => Add.curried(hoas612)(hoas611)) | (char('-') ~> term).map(hoas613 => hoas614 => Sub.curried(hoas614)(hoas613)))
+  // TODO: we can totally turn this into chain...?
   lazy val term: Parsley[Expr] = chain.postfix[Expr](negate)((char('*') ~> negate).map(hoas841 => hoas842 => Mul.curried(hoas842)(hoas841)))
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
   lazy val atom: Parsley[Expr] = (char('(') ~> expr <~ char(')')) | Num(number)
