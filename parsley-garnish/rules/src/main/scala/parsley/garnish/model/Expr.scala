@@ -17,7 +17,7 @@ sealed abstract class Expr extends Product with Serializable {
         boundVars.getOrElse(v, Sem.Var(name, displayType))
       case AbsN(xs, f) =>
         Sem.Abs(xs.map(_.displayType), vs => eval(f, boundVars ++ xs.zip(vs)))
-      case App(f, xs) => eval(f, boundVars) match {
+      case AppN(f, xs) => eval(f, boundVars) match {
         case Sem.Abs(_, g) => g(xs.map(eval(_, boundVars)))
         case g => Sem.App(g, xs.map(eval(_, boundVars)))
       }
@@ -32,9 +32,9 @@ sealed abstract class Expr extends Product with Serializable {
 }
 
 object Expr {
-  sealed trait Lambda extends Expr
+  type VarName = String
 
-  case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty) extends Lambda {
+  final case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty) extends Expr {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -52,8 +52,7 @@ object Expr {
     val term = transformer(originalTerm).asInstanceOf[Term]
   }
 
-  type VarName = String
-  case class Var(name: VarName, displayType: Option[Type]) extends Lambda {
+  final case class Var(name: VarName, displayType: Option[Type]) extends Expr {
     val term = Term.Name(name)
   }
 
@@ -65,7 +64,7 @@ object Expr {
   }
 
   /* xs: (T1, T2, ..., TN), f: R, \(x1, x2, ..., xn).f : (T1, T2, ..., TN) => R */
-  case class AbsN(xs: List[Var], f: Expr) extends Lambda {
+  final case class AbsN(xs: List[Var], f: Expr) extends Expr {
     val term = {
       // Vars are only annotated with their types in this position
       val params = xs.map(x => Term.Param(List.empty, Term.Name(x.name), x.displayType, None))
@@ -83,11 +82,11 @@ object Expr {
   }
 
   /* f: (T1, T2, ..., TN) => R, xs: (T1, T2, ..., TN), f xs : R */
-  case class App(f: Expr, xs: List[Expr]) extends Lambda {
+  final case class AppN(f: Expr, xs: List[Expr]) extends Expr {
     val term = q"${f.term}(..${xs.map(_.term)})"
   }
   object App {
-    def apply(f: Expr, x: Expr): App = App(f, List(x))
+    def apply(f: Expr, x: Expr): AppN = AppN(f, List(x))
   }
 
   /* id : A => A */
@@ -137,7 +136,7 @@ private sealed abstract class Sem extends Product with Serializable {
       case Abs(tpes, f) =>
         val params = tpes.map(Expr.Var(freshSupply.next(), _))
         Expr.AbsN(params, reify0(f(params.map { case Expr.Var(name, tpe) => Sem.Var(name, tpe) } )))
-      case App(f, xs) => Expr.App(reify0(f), xs.map(reify0))
+      case App(f, xs) => Expr.AppN(reify0(f), xs.map(reify0))
       case Translucent(t, env) => Expr.Translucent(t, env.view.mapValues(reify0).toMap)
       case Var(name, displayType) => Expr.Var(name, displayType)
     }
@@ -147,20 +146,8 @@ private sealed abstract class Sem extends Product with Serializable {
 }
 
 private object Sem {
-  case class Abs(paramTypes: List[Option[Type]], f: List[Sem] => Sem) extends Sem
-  object Abs {
-    def apply(f: List[Sem] => Sem): Abs = Abs(List(None), f)
-  }
-
-  case class App(f: Sem, xs: List[Sem]) extends Sem
-  object App {
-    def apply(f: List[Sem], xs: List[Sem]): App = {
-      assert(f.size == 1)
-      App(f.head, xs)
-    }
-  }
-
-  case class Var(name: Expr.VarName, displayType: Option[Type]) extends Sem
-
-  case class Translucent(t: Term, env: Map[Expr.VarName, Sem] = Map.empty) extends Sem
+  final case class Abs(paramTypes: List[Option[Type]], f: List[Sem] => Sem) extends Sem
+  final case class App(f: Sem, xs: List[Sem]) extends Sem
+  final case class Var(name: Expr.VarName, displayType: Option[Type]) extends Sem
+  final case class Translucent(t: Term, env: Map[Expr.VarName, Sem] = Map.empty) extends Sem
 }
