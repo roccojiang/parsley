@@ -7,7 +7,6 @@ import scalafix.v1._
 import Expr._
 import parsley.garnish.implicits.TermOps
 import parsley.garnish.analysis.ParserTransformer.ParserDefinition
-import parsley.garnish.utils.TypeUtils.getParsleyType
 
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
@@ -42,7 +41,7 @@ sealed abstract class Parser extends Product with Serializable {
     // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
     case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => p ~> q
     // p.map(\x -> \y -> x) <*> q == p <~ q
-    case FMap(p, Abs(Var(x, _), Abs(_, Var(z, _)))) <*> q if (x == z) => ThenDiscard(p, q)
+    case FMap(p, Abs(Var(x, _), Abs(_, Var(z, _)))) <*> q if (x == z) => p <~ q
 
     // f.curried.map(p) <*> q == (p, q).zipped(f)
     // TODO: up to 22 args
@@ -115,10 +114,10 @@ object Parser {
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
-      if (!(ctx.env contains ref)) UnfoldedParser(None, this, Empty)
+      if (!ctx.env.contains(ref)) UnfoldedParser(None, this, Empty)
       else {
-        val tpe = getParsleyType(ref)
-        assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
+        // val tpe = getParsleyType(ref)
+        // assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
 
         if (ref == ctx.nonTerminal) {
           UnfoldedParser(None, Empty, Pure(id))
@@ -383,11 +382,11 @@ object Parser {
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       val liftedFunc: Parser = Pure(func match {
         case Translucent(f @ Term.Name(_), substs) if parsers.size > 1 => Translucent(q"$f.curried", substs)
-        case _ => func
+        case _ => func.curried
       })
-      val curried = parsers.foldLeft(liftedFunc)(_ <*> _)
+      val curriedForm = parsers.foldLeft(liftedFunc)(_ <*> _)
 
-      curried.unfold
+      curriedForm.unfold
     }
   }
 

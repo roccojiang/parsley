@@ -44,7 +44,9 @@ object Transformation {
       case leftRec =>
         println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
         // println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
-        Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).prettify)
+        val result = Some(Postfix(tpe, nonLeftRec <|> empties, leftRec).prettify)
+        println(result)
+        result
     }
   }
 

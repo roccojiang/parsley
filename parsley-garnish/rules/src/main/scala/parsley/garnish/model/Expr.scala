@@ -9,6 +9,12 @@ sealed abstract class Expr extends Product with Serializable {
 
   def isEquivalent(other: Expr): Boolean = this.evaluate.reify == other.evaluate.reify
 
+  def curried: Expr = this match {
+    case Abs(x, f) => Abs(x, f.curried)
+    case AbsN(x :: xs, f) => Abs(x, AbsN(xs, f).curried)
+    case _ => this
+  }
+
   def normalise: Expr = this.evaluate.reify
 
   private def evaluate: Sem = {
