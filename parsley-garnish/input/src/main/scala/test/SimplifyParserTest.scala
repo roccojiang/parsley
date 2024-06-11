@@ -13,6 +13,7 @@ object SimplifyParserTest {
 
   // shouldn't alpha-convert variables (due to function normalisation) if parsers don't need to be simplified
   val noSimplification = pure((x: Int, y: Int) => x + y)
+  val noSimplification2 = pure((_: String) + (_: String))
 
   /***** Parser laws *****/
   val altRightNeutral = "anise" <|> empty

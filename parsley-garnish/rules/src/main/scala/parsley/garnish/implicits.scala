@@ -18,7 +18,7 @@ object implicits {
   implicit class TermOps(private val term: Term) extends AnyVal {
     import model.{Expr, Parser}, Expr._, Parser._
 
-    def toFunction(debugName: String)(implicit doc: SemanticDocument): Expr = {
+    def toExpr(debugName: String)(implicit doc: SemanticDocument): Expr = {
       // parsley.garnish.utils.printInfo(term, debugName)
       // println(s"BUILDING FUNCTION FROM TERM: $term")
 
@@ -74,9 +74,12 @@ object implicits {
 
       val (reversedParamLists, body) = recurseParamLists(func, List.empty)
 
-      // Replace each method parameter with a fresh variable to preserve Barendregt's convention
+      // Hygiene: rename each parameter to its (unique?) symbol name
       val freshReplacements = reversedParamLists.reverse.map(_.collect {
-        case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var.fresh(Some("_l"), decltpe)
+        case p @ Term.Param(_, _, decltpe, _) =>
+          // TODO: placeholder parameters will not have symbols
+          // p.symbol -> Var(p.symbol.value, decltpe)
+          p.symbol -> Var.fresh(Some("_l"), decltpe)
       })
       val freshParams = freshReplacements.map(_.map(_._2))
       val symbolsMap = freshReplacements.flatten.toMap

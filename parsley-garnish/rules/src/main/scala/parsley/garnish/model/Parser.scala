@@ -15,7 +15,8 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def prettify: Parser = this.simplify.normaliseFunctions.resugar
+  def normalise: Parser = this.simplify.normaliseFunctions
+  def prettify: Parser = this.normalise.resugar
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
@@ -32,7 +33,7 @@ sealed abstract class Parser extends Product with Serializable {
     // pure(x).map(f) == pure(f) <*> pure(x) == pure(f(x))
     case FMap(Pure(x), f)    => Pure(App(f, x))
     // p.map(f).map(g) == p.map(g compose f)
-    case FMap(FMap(p, f), g) => FMap(p, composeH(g, f))
+    case FMap(FMap(p, f), g) => FMap(p, compose(g, f))
   }
 
   /* Resugar parsers that may have been desugared */
@@ -71,9 +72,9 @@ sealed abstract class Parser extends Product with Serializable {
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
     val p = this match {
-      case Choice(p, q) => p.transform(pf) <|> q.transform(pf)
-      case Ap(p, q) => p.transform(pf) <*> q.transform(pf)
-      case Then(p, q) => p.transform(pf) ~> q.transform(pf)
+      case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
+      case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
+      case Then(p, q) => Then(p.transform(pf), q.transform(pf))
       case ThenDiscard(p, q) => ThenDiscard(p.transform(pf), q.transform(pf))
       case FMap(p, f) => FMap(p.transform(pf), f)
       case Many(p) => Many(p.transform(pf))
@@ -149,7 +150,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Pure] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(func), _)) =>
-        Pure(func.toFunction("PURE"))
+        Pure(func.toExpr("PURE"))
     }
   }
 
@@ -206,7 +207,7 @@ object Parser {
 
       val lefts = {
         val llr = pl.map(flip) <*> q
-        val rlr = pe.map(f => ql.map(composeH(f))).getOrElse(Empty)
+        val rlr = pe.map(f => ql.map(compose(f))).getOrElse(Empty)
         llr <|> rlr
       }
 
@@ -292,7 +293,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, FMap] = {
       case Term.Apply.After_4_6_0(Term.Select(qual, matcher(_)), Term.ArgClause(List(func), _)) =>
-        FMap(qual.toParser, func.toFunction("MAP"))
+        FMap(qual.toParser, func.toExpr("MAP"))
     }
   }
 
@@ -309,7 +310,7 @@ object Parser {
         val nt = Var.fresh()
 
         // \f xs nt -> f nt : xs
-        Abs(f, Abs(xs, Abs(nt, consH(App(f, nt), xs))))
+        Abs(f, Abs(xs, Abs(nt, cons(App(f, nt), xs))))
       } <*> Many(p)
 
       val nonLefts = SomeP(pn)
@@ -406,7 +407,7 @@ object Parser {
           case Term.ApplyType.After_4_6_0(g, _) => g
           case _ => f
         }
-        LiftImplicit(func.toFunction("LIFT_IMPLICIT"), ps.map(_.toParser))
+        LiftImplicit(func.toExpr("LIFT_IMPLICIT"), ps.map(_.toParser))
     }
   }
 
@@ -423,7 +424,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftExplicit] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(f :: ps, _)) =>
-        LiftExplicit(f.toFunction("LIFT_EXPLICIT"), ps.map(_.toParser))
+        LiftExplicit(f.toExpr("LIFT_EXPLICIT"), ps.map(_.toParser))
     }
   }
 
@@ -439,7 +440,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {
       case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), matcher(_)), Term.ArgClause(List(f), _)) =>
-        Zipped(f.toFunction("ZIPPED"), ps.map(_.toParser))
+        Zipped(f.toExpr("ZIPPED"), ps.map(_.toParser))
     }
   }
 
@@ -455,7 +456,7 @@ object Parser {
       case Term.Apply.After_4_6_0(func, ps) if func.synthetics.exists(cond(_) {
           case SelectTree(_, IdTree(symInfo)) => matcher.matches(symInfo.symbol)
       }) =>
-        Bridge(func.toFunction("BRIDGE"), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
+        Bridge(func.toExpr("BRIDGE"), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
   }
 
@@ -473,5 +474,9 @@ object Parser {
     def <~(q: Parser): Parser = ThenDiscard(p, q)
     def <|>(q: Parser): Parser = Choice(p, q)
     def map(f: Expr): Parser = FMap(p, f)
+  }
+
+  implicit class MultiParserOps(private val ps: List[Parser]) extends AnyVal {
+    def zipped(f: Expr): Parser = Zipped(f, ps)
   }
 }

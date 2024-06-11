@@ -1,12 +1,15 @@
 /*
 rule = FactorLeftRecursion
+// FactorLeftRecursion.debugOptions = [reportNonTerminalLocations]
  */
 package test.leftrec
 
-import parsley.Parsley
+import parsley.Parsley, Parsley._
 import parsley.character._
 import parsley.generic._
+import parsley.syntax.lift._
 import parsley.syntax.zipped._
+import parsley.expr.chain
 
 object ExprTest {
   sealed trait Expr
@@ -32,4 +35,20 @@ object ExprTest {
   lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
 
   lazy val p: Parsley[String] = (p, string("a")).zipped(_ + _) | string("b")
+
+  case class Inc(x: Expr) extends Expr
+  val incsWrong: Parsley[Expr] = Inc.lift(incsWrong) | Num(number)
+  // val incsWrong = chain.postfix[Expr](number.map(Num(_)))(pure(x1 => Inc(x1))) // triggers parsley.exceptions.NonProductiveIterationException
+  val incs: Parsley[Expr] = Inc.lift(incs) <~ char('+') | Num(number)
+
+  val inc3 = chain.postfix[Expr](number.map(Num(_)))(char('+').map(x1 => x2 => Inc(x2)))
+
+  def main(args: Array[String]): Unit = {
+// [error] parsley.exceptions.NonProductiveIterationException: chain given parser which consumes no input, this will cause it to loop indefinitely
+// [error]         at test.leftrec.ExprTest$.main(ExprTest.scala:44)
+// [error]         at test.leftrec.ExprTest.main(ExprTest.scala)
+// [error]         at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+// [error]         at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    println(inc3.parse("1+++"))
+  }
 }
