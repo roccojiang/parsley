@@ -15,9 +15,13 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def normalise: Parser = this.simplify.normaliseFunctions
+  def normalise: Parser = this.removeTags.simplify.normaliseFunctions
   // def prettify: Parser = this.normalise
-  def prettify: Parser = this.normalise.resugar
+  def prettify: Parser = this.simplify.resugar.removeTags.simplify.normaliseFunctions
+
+  def removeTags: Parser = this.rewrite {
+    case Tag(_, p) => p
+  }
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
@@ -85,7 +89,7 @@ sealed abstract class Parser extends Product with Serializable {
   //   }
   // }
 
-  def applyPF[A](pf: PartialFunction[Parser, A]): A
+  // def applyPF[A](pf: PartialFunction[Parser, A]): A
 
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
