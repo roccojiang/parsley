@@ -15,13 +15,13 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def normalise: Parser = this.removeTags.simplify.normaliseFunctions
-  // def prettify: Parser = this.normalise
-  def prettify: Parser = this.simplify.resugar.removeTags.simplify.normaliseFunctions
+  def isEquivalent(other: Parser): Boolean = this.normalise == other.normalise
 
-  def removeTags: Parser = this.rewrite {
-    case Tag(_, p) => p
-  }
+  /* Faster(?) than prettification, used for equivalence checking */
+  def normalise: Parser = this.rewrite { case Tag(_, p) => p }.simplify.normaliseExprs
+
+  /* Simplify parsers and attempt to resguar them */
+  def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
@@ -45,6 +45,7 @@ sealed abstract class Parser extends Product with Serializable {
   private[garnish] def resugar: Parser = this.transform {
     // Targeted resugaring based on desugaring tags
     case Tag(resugarer, parser) => parser.transform(resugarer)
+
   }.rewrite {
     // Generic resugaring rules that are run on all parsers
 
@@ -62,6 +63,7 @@ sealed abstract class Parser extends Product with Serializable {
       Zipped(AbsN(List(x1, x2, x3), body), List(p1, p2, p3))
     case FMap(p1, Abs(x1, Abs(x2, Abs(x3, Abs(x4, body))))) <*> p2 <*> p3 <*> p4 =>
       Zipped(AbsN(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
+
   }.transform {
     // Generic resugaring rules that should only be applied once, since RHS constructors overlap with LHS constructors
     // If applied using rewrite, it would never terminate
@@ -70,7 +72,7 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(Str(s, _), f) => FMap(Str(s, implicitSyntax = false), f)
   }
 
-  private[garnish] def normaliseFunctions: Parser = this.transform {
+  private[garnish] def normaliseExprs: Parser = this.transform {
     case Pure(f) => Pure(f.normalise)
     case FMap(p, f) => FMap(p, f.normalise)
     case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)

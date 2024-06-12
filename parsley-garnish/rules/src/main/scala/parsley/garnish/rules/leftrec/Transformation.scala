@@ -10,7 +10,7 @@ import parsley.garnish.model.Parser, Parser._
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
     val nonTerminals = getNonTerminalParserDefns.map { parserDefn =>
-      parserDefn.name.symbol -> (parserDefn.parser.normaliseFunctions, parserDefn)
+      parserDefn.name.symbol -> (parserDefn.parser.normaliseExprs, parserDefn)
     }.to(mutable.Map)
 
     // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
@@ -26,20 +26,13 @@ object Transformation {
       }
     }.asPatch
 
-    // val rewrites = originalParserDefns.zip(nonTerminals.values).collect {
-    //   case (ParserDefinition(_, original, _, tree), ParserDefinition(_, transformed, _, _))
-    //     if original.normaliseFunctions != transformed.normaliseFunctions =>
-    //       Patch.replaceTree(tree, transformed.term.syntax)
-    // }.asPatch
+    val rewrites = nonTerminals.values.collect {
+      case (original, ParserDefinition(_, transformed, _, originalTree)) if !original.isEquivalent(transformed) =>
+        Patch.replaceTree(originalTree, transformed.term.syntax)
+    }.asPatch
 
     // TODO: make patches atomic?
-    // lints + rewrites
-    lints + nonTerminals.values.map {
-      case (original, ParserDefinition(_, transformed, _, originalTree)) if original != transformed =>
-        println(s"asdfasdf ${original.term.syntax} ##### ${transformed.term.syntax}")  
-        Patch.replaceTree(originalTree, transformed.term.syntax)
-      case _ => Patch.empty
-    }.asPatch
+    lints + rewrites
   }
 
   /* Returns a parser transformed into postfix form if it is left-recursive. */
