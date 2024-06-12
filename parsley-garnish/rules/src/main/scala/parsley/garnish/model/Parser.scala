@@ -16,6 +16,7 @@ sealed abstract class Parser extends Product with Serializable {
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
   def normalise: Parser = this.simplify.normaliseFunctions
+  // def prettify: Parser = this.normalise
   def prettify: Parser = this.normalise.resugar
 
   /* Simplification via parser laws */
@@ -36,8 +37,13 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(FMap(p, f), g) => FMap(p, compose(g, f))
   }
 
-  /* Resugar parsers that may have been desugared */
-  private[garnish] def resugar: Parser = this.rewrite {
+  /* Resugaring */
+  private[garnish] def resugar: Parser = this.transform {
+    // Targeted resugaring based on desugaring tags
+    case Tag(resugarer, parser) => parser.transform(resugarer)
+  }.rewrite {
+    // Generic resugaring rules that are run on all parsers
+
     // p.map(\x -> \y -> y) <*> q == p ~> q
     // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
     case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => p ~> q
@@ -53,7 +59,7 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(p1, Abs(x1, Abs(x2, Abs(x3, Abs(x4, body))))) <*> p2 <*> p3 <*> p4 =>
       Zipped(AbsN(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
   }.transform {
-    // Rules that should only be applied once, since the RHS constructors overlap with LHS constructors
+    // Generic resugaring rules that should only be applied once, since RHS constructors overlap with LHS constructors
     // If applied using rewrite, it would never terminate
 
     // Scala 2 cannot resolve implicit stringLift on "s".map(f)
@@ -69,9 +75,42 @@ sealed abstract class Parser extends Product with Serializable {
     case Bridge(func, parsers) => Bridge(func.normalise, parsers)
   }
 
+  // private def apply[A](pf: PartialFunction[Parser, A]): Parser = {
+
+  // }
+
+  // private def transform0(pf: PartialFunction[Parser, Parser]): Parser = {
+  //   val yes = this.rewrite {
+  //     case Tag(_, p) => p
+  //   }
+  // }
+
+  def applyPF[A](pf: PartialFunction[Parser, A]): A
+
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
-    val p = this match {
+    // Apply pf underneath resugaring tags, and rewrap them back
+    def pfApply(parser: Parser): Parser = parser match {
+      case Tag(resugarer, p) => Tag(resugarer, pfApply(p))
+      case _                 => pf(parser)
+    }
+
+    // def isPfDefinedAt(parser: Parser): Boolean = {
+    //   println("CHECKING IF DEFIND")
+    //   val result = pf.isDefinedAt(parser.rewrite {
+    //     case Tag(_, p) => p
+    //   })
+    //   println(s"DONE: $result")
+    //   result
+    // }
+
+    // def isPfDefinedAt(parser: Parser): Boolean = parser match {
+    //   case Ap(Tag(_, p), q) => pf.isDefinedAt(Ap(p, q))
+    //   case Tag(_, p) => isPfDefinedAt(p)
+    //   case _         => pf.isDefinedAt(parser)
+    // }
+
+    val parser = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
       case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
       case Then(p, q) => Then(p.transform(pf), q.transform(pf))
@@ -85,14 +124,17 @@ sealed abstract class Parser extends Product with Serializable {
       case Zipped(f, ps) => Zipped(f, ps.map(_.transform(pf)))
       case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
 
+      case Tag(resugarer, p) => Tag(resugarer, p.transform(pf))
+
       case s: Str => s
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
       case unk: Unknown => unk
     }
-  
-    if (pf.isDefinedAt(p)) pf(p) else p
+
+    // if (isPfDefinedAt(parser)) pfApply(parser) else parser
+    if (pf.isDefinedAt(parser)) pf(parser) else parser
   }
 
   // Transformation to normal form in a bottom-up manner
@@ -111,6 +153,16 @@ object Parser {
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
   case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
     val isLeftRecursive = leftRec.normalise != Empty
+  }
+
+  final case class Tag(resugarer: PartialFunction[Parser, Parser], parser: Parser) extends Parser {
+    // def term = parser.transform(resugarer).term
+    def term = parser.term
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val UnfoldedParser(empty, nonLeftRec, leftRec) = parser.unfold
+      UnfoldedParser(empty, Tag(resugarer, nonLeftRec), Tag(resugarer, leftRec))
+    }
   }
 
   final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
@@ -385,11 +437,17 @@ object Parser {
     def parsers: List[Parser]
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      // TODO: properly keep track if things were curried
       val liftedFunc: Parser = Pure(func match {
         case Translucent(f @ Term.Name(_), substs) if parsers.size > 1 => Translucent(q"$f.curried", substs)
         case _ => func.curried
       })
-      val curriedForm = parsers.foldLeft(liftedFunc)(_ <*> _)
+
+      val curriedForm = this match {
+        case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(liftedFunc)(_ <*> _))
+        case _ => parsers.foldLeft(liftedFunc)(_ <*> _)
+      }
+      // val curriedForm = parsers.foldLeft(liftedFunc)(_ <*> _)
 
       curriedForm.unfold
     }
@@ -449,7 +507,8 @@ object Parser {
   }
 
   final case class Bridge(func: Expr, parsers: List[Parser]) extends LiftLike {
-    val term = q"${func.term}(..${parsers.map(_.term)})"
+    // val term = q"${func.term}(..${parsers.map(_.term)})"
+    val term = AppN(func, parsers.map(p => Translucent(p.term))).normalise.term
   }
   object Bridge {
     val matcher = SymbolMatcher.normalized(

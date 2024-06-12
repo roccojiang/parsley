@@ -40,7 +40,7 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    println(s">>>${parserDefn.name.syntax}<<< EMPTY = ${empties.prettify} | NONLEFTREC = ${nonLeftRec} | LEFTREC = ${leftRec.prettify}")
+    // println(s">>>${parserDefn.name.syntax}<<< EMPTY = ${empties.prettify} | NONLEFTREC = ${nonLeftRec} | LEFTREC = ${leftRec.prettify}")
 
     leftRec.normalise match {
       case Empty => Left(Patch.empty)
@@ -53,9 +53,9 @@ object Transformation {
       // perhaps add an importer for each parser, do a traversal at the end to collect all required imports
       // TODO: report can't left factor if there are impure parsers
       case leftRec =>
-        // println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")
-        // println(s">>> POSTFIX: empties = ${empties.simplify}, nonLeftRec = ${nonLeftRec.simplify}, leftRec = ${leftRec.simplify}")
-        Right(Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec).prettify)
+        val postfixed = Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec).prettify
+        println(s">>>${parserDefn.name.syntax}<<< = ${postfixed}")  
+        Right(postfixed)
     }
   }
 

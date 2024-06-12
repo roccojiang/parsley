@@ -26,7 +26,7 @@ object ExprTest {
   object Neg extends ParserBridge1[Expr, Neg]
   object Num extends ParserBridge1[Int, Num]
 
-  val number = digit.foldLeft1(0)(((n, d) => n * 10 + d.asDigit))
+  val number = digit.foldLeft1(0)((n, d) => n * 10 + d.asDigit)
   lazy val expr: Parsley[Expr] = Add(expr, char('+') ~> term) | Sub(expr, char('-') ~> term) | term
   lazy val term: Parsley[Expr] = Mul(term, char('*') ~> negate) | negate
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
