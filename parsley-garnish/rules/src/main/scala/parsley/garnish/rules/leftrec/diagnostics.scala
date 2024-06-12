@@ -7,14 +7,17 @@ import scalafix.v1.Diagnostic
 import parsley.garnish.model.Parser
 import parsley.garnish.analysis.ParserTransformer.ParserDefinition
 
-case class NonTerminalLint(tree: Tree, name: String) extends Diagnostic {
-  override def position: Position = tree.pos
+case class DebugNonTerminalLint(parserDefn: ParserDefinition) extends Diagnostic {
+  override def position: Position = parserDefn.definitionSite
   override def severity: LintSeverity = LintSeverity.Info
-  override def message: String = s"$name was detected to be a non-terminal."
+  override def message: String =
+    s"""${parserDefn.name.syntax} was detected to be a non-terminal, and parsed as:
+       |${parserDefn.parser}
+     """.stripMargin
 }
 
 case class LeftRecDerivesEmptyLint(parserDefn: ParserDefinition, transformed: Parser) extends Diagnostic {
-  override def position: Position = parserDefn.originalTree.pos
+  override def position: Position = parserDefn.definitionSite
   override def severity: LintSeverity = LintSeverity.Error
   override def message: String =
     s"""Left-recursion could not be removed from ${parserDefn.name.syntax}.

@@ -55,11 +55,10 @@ object implicits {
         // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
         // against matching multiple times using SymbolMatchers
 
-        // any other unrecognised term names will be assumed to be a non-terminal
-        // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
-        case t: Term.Name => NonTerminal(t.symbol)
+        // TODO: is there a way to flip this round to check if the owner is the current file's package? I can't find a way to get this information
+        case t: Term.Name if !(t.symbol.owner.value startsWith "parsley/") => NonTerminal(t.symbol)
 
-        case unrecognisedTerm => Unknown(unrecognisedTerm)
+        case unrecognised => Unknown(unrecognised)
       }
     }
 

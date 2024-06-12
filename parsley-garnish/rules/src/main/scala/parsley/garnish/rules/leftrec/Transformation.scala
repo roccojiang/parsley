@@ -48,6 +48,9 @@ object Transformation {
         LeftRecDerivesEmptyLint(parserDefn, Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec).prettify)
       ))
       // TODO: import postfix if not in scope
+      // https://www.javadoc.io/doc/ch.epfl.scala/scalafix-core_2.12/0.12.1/scalafix/patch/Patch$.html
+      // addGlobalImport
+      // perhaps add an importer for each parser, do a traversal at the end to collect all required imports
       // TODO: report can't left factor if there are impure parsers
       case leftRec =>
         // println(s">>> ${Postfix(tpe, nonLeftRec <|> empties, leftRec)}")

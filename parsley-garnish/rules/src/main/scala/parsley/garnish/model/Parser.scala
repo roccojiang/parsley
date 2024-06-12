@@ -105,33 +105,37 @@ sealed abstract class Parser extends Product with Serializable {
   // override def toString: String = term.syntax
 }
 
+// TODO: https://github.com/j-mie6/parsley/issues/236 opaque-style tagging?
 object Parser {
 
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
-  case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser)
+  case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
+    val isLeftRecursive = leftRec.normalise != Empty
+  }
 
   final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName)
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      // TODO: this is a hack so that any single-arg Parsley combinators flagged as NTs are skipped - fix this!!!
-      if (!ctx.env.contains(ref)) UnfoldedParser(None, this, Empty)
-      else {
-        // val tpe = getParsleyType(ref)
-        // assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
+      assert(ctx.env.contains(ref), s"expected to find non-terminal $ref in this file")
 
-        if (ref == ctx.nonTerminal) {
-          UnfoldedParser(None, Empty, Pure(id))
-        } else if (ctx.visited.contains(ref)) {
+      // val tpe = getParsleyType(ref)
+      // assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
+
+      if (ref == ctx.nonTerminal) {
+        UnfoldedParser(None, Empty, Pure(id))
+      } else if (ctx.visited.contains(ref)) {
+        UnfoldedParser(None, NonTerminal(ref), Empty)
+      } else {
+        val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
+
+        if (!unfoldedRef.isLeftRecursive) {
+          // the non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly,
+          // rather than aggressively inlining it
           UnfoldedParser(None, NonTerminal(ref), Empty)
         } else {
-          val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
-
-          if (unfoldedRef.leftRec.prettify == Empty)
-            // The non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly
-            UnfoldedParser(None, NonTerminal(ref), Empty)
-          else
-            unfoldedRef // in the left-recursive case, we need to inline the result of the unfolded non-terminal
+          // in the left-recursive case, we must inline the result of the unfolded non-terminal
+          unfoldedRef
         }
       }
     }
@@ -288,7 +292,7 @@ object Parser {
       (Pure(f) <*> p).unfold
     }
   }
-  object FMap {
+    object FMap {
     val matcher = SymbolMatcher.normalized("parsley.Parsley.map")
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, FMap] = {
