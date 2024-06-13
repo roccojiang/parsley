@@ -48,6 +48,7 @@ object implicits {
         LiftExplicit.fromTerm,
         Zipped.fromTerm,
         Bridge.fromTerm,
+        EndBy.fromTerm,
       ).reduce(_ orElse _)
 
       if (transforms.isDefinedAt(term)) transforms(term)

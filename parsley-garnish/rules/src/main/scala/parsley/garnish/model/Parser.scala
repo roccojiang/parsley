@@ -20,24 +20,12 @@ sealed abstract class Parser extends Product with Serializable {
   /* Faster(?) than prettification, used for equivalence checking */
   def normalise: Parser = this.rewrite { case Tag(_, p) => p }.simplify.normaliseExprs
 
-  /* Simplify parsers and attempt to resguar them */
+  /* Simplify parsers and attempt to resugar them */
   // def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
-  // def prettify: Parser = {
-  //   println(s"Step 0: ${this.term.syntax}")
-  //   val step1 = this.simplify
-  //   println(s"Step 1: ${step1.term.syntax}")
-  //   val step2 = step1.resugar
-  //   println(s"Step 2: ${step2.term.syntax}")
-  //   val step3 = step2.simplify
-  //   println(s"Step 3: ${step3.term.syntax}")
-  //   val step4 = step3.normaliseExprs
-  //   println(s"Step 4: ${step4.term.syntax}")
-  //   step4
-  // }
   def prettify = normalise.resugar
 
   /* Simplification via parser laws */
-  private[garnish] def simplify: Parser = this.rewrite {
+  def simplify: Parser = this.rewrite {
     case p <|> Empty         => p
     case Empty <|> q         => q
     case Pure(f) <|> _       => Pure(f)
@@ -55,11 +43,10 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   /* Resugaring */
-  private[garnish] def resugar: Parser = this.rewrite {
-    // Targeted resugaring based on desugaring tags
-    case Tag(resugarer, parser) =>
+  def resugar: Parser = this.rewrite {
+    // TODO: Targeted resugaring based on desugaring tags
+    case Tag(_, parser) => parser
       // parser.transform(resugarer)
-      parser
 
   }.rewrite {
     // Generic resugaring rules that are run on all parsers
@@ -87,7 +74,7 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(Str(s, _), f) => FMap(Str(s, implicitSyntax = false), f)
   }
 
-  private[garnish] def normaliseExprs: Parser = this.transform {
+  def normaliseExprs: Parser = this.transform {
     case Pure(f) => Pure(f.normalise)
     case FMap(p, f) => FMap(p, f.normalise)
     case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
@@ -97,7 +84,7 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   // Bottom-up transformation
-  private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
+  def transform(pf: PartialFunction[Parser, Parser]): Parser = {
     val parser = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
       case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
@@ -111,6 +98,7 @@ sealed abstract class Parser extends Product with Serializable {
       case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(_.transform(pf)))
       case Zipped(f, ps) => Zipped(f, ps.map(_.transform(pf)))
       case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
+      case EndBy(p, sep) => EndBy(p.transform(pf), sep.transform(pf))
 
       case Tag(resugarer, p) => Tag(resugarer, p.transform(pf))
 
@@ -125,7 +113,7 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   // Transformation to normal form in a bottom-up manner
-  private def rewrite(pf: PartialFunction[Parser, Parser]): Parser = {
+  def rewrite(pf: PartialFunction[Parser, Parser]): Parser = {
     def pf0(p: Parser) = if (pf.isDefinedAt(p)) pf(p).rewrite(pf) else p
 
     this.transform(pf0)
@@ -507,6 +495,20 @@ object Parser {
       }) =>
         Bridge(func.toExpr("BRIDGE"), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
+  }
+
+  final case class EndBy(p: Parser, sep: Parser) extends Parser {
+    val term = q"endBy(${p.term}, ${sep.term})"
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = Many(p <~ sep).unfold
+  }
+  object EndBy {
+    val matcher = SymbolMatcher.normalized("parsley.combinator.endBy")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, EndBy] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(p, sep), None)) =>
+        EndBy(p.toParser, sep.toParser)
+    }
   }
 
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
