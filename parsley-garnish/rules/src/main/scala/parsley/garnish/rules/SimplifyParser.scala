@@ -9,7 +9,7 @@ class SimplifyParser extends SemanticRule("SimplifyParser") {
   override def fix(implicit doc: SemanticDocument): Patch = {
     getAllParserDefns.map { case ParserDefinition(_, parser, _, originalTree) =>
       val simplifiedParser = parser.prettify
-      if (parser.normaliseFunctions != simplifiedParser) {
+      if (parser.normaliseExprs != simplifiedParser) {
         val simplifiedParserTerm = simplifiedParser.term.syntax
         Patch.replaceTree(originalTree, simplifiedParserTerm)
       } else {

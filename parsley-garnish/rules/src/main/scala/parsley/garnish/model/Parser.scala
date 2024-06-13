@@ -15,8 +15,26 @@ sealed abstract class Parser extends Product with Serializable {
 
   def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser
 
-  def normalise: Parser = this.simplify.normaliseFunctions
-  def prettify: Parser = this.normalise.resugar
+  def isEquivalent(other: Parser): Boolean = this.normalise == other.normalise
+
+  /* Faster(?) than prettification, used for equivalence checking */
+  def normalise: Parser = this.rewrite { case Tag(_, p) => p }.simplify.normaliseExprs
+
+  /* Simplify parsers and attempt to resguar them */
+  // def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
+  // def prettify: Parser = {
+  //   println(s"Step 0: ${this.term.syntax}")
+  //   val step1 = this.simplify
+  //   println(s"Step 1: ${step1.term.syntax}")
+  //   val step2 = step1.resugar
+  //   println(s"Step 2: ${step2.term.syntax}")
+  //   val step3 = step2.simplify
+  //   println(s"Step 3: ${step3.term.syntax}")
+  //   val step4 = step3.normaliseExprs
+  //   println(s"Step 4: ${step4.term.syntax}")
+  //   step4
+  // }
+  def prettify = normalise.resugar
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
@@ -36,8 +54,16 @@ sealed abstract class Parser extends Product with Serializable {
     case FMap(FMap(p, f), g) => FMap(p, compose(g, f))
   }
 
-  /* Resugar parsers that may have been desugared */
+  /* Resugaring */
   private[garnish] def resugar: Parser = this.rewrite {
+    // Targeted resugaring based on desugaring tags
+    case Tag(resugarer, parser) =>
+      // parser.transform(resugarer)
+      parser
+
+  }.rewrite {
+    // Generic resugaring rules that are run on all parsers
+
     // p.map(\x -> \y -> y) <*> q == p ~> q
     // TODO: is there still a chance that \x.\y.body has a single-term Translucent body rather than a Var?
     case FMap(p, Abs(_, Abs(Var(y, _), Var(z, _)))) <*> q if (y == z) => p ~> q
@@ -52,15 +78,16 @@ sealed abstract class Parser extends Product with Serializable {
       Zipped(AbsN(List(x1, x2, x3), body), List(p1, p2, p3))
     case FMap(p1, Abs(x1, Abs(x2, Abs(x3, Abs(x4, body))))) <*> p2 <*> p3 <*> p4 =>
       Zipped(AbsN(List(x1, x2, x3, x4), body), List(p1, p2, p3, p4))
+
   }.transform {
-    // Rules that should only be applied once, since the RHS constructors overlap with LHS constructors
+    // Generic resugaring rules that should only be applied once, since RHS constructors overlap with LHS constructors
     // If applied using rewrite, it would never terminate
 
     // Scala 2 cannot resolve implicit stringLift on "s".map(f)
     case FMap(Str(s, _), f) => FMap(Str(s, implicitSyntax = false), f)
   }
 
-  private[garnish] def normaliseFunctions: Parser = this.transform {
+  private[garnish] def normaliseExprs: Parser = this.transform {
     case Pure(f) => Pure(f.normalise)
     case FMap(p, f) => FMap(p, f.normalise)
     case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
@@ -71,7 +98,7 @@ sealed abstract class Parser extends Product with Serializable {
 
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
-    val p = this match {
+    val parser = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
       case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
       case Then(p, q) => Then(p.transform(pf), q.transform(pf))
@@ -85,14 +112,16 @@ sealed abstract class Parser extends Product with Serializable {
       case Zipped(f, ps) => Zipped(f, ps.map(_.transform(pf)))
       case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
 
+      case Tag(resugarer, p) => Tag(resugarer, p.transform(pf))
+
       case s: Str => s
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
       case unk: Unknown => unk
     }
-  
-    if (pf.isDefinedAt(p)) pf(p) else p
+
+    if (pf.isDefinedAt(parser)) pf(parser) else parser
   }
 
   // Transformation to normal form in a bottom-up manner
@@ -111,6 +140,15 @@ object Parser {
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
   case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
     val isLeftRecursive = leftRec.normalise != Empty
+  }
+
+  final case class Tag(resugarer: PartialFunction[Parser, Parser], parser: Parser) extends Parser {
+    def term = q"TAGGED(${parser.term})"
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      val UnfoldedParser(empty, nonLeftRec, leftRec) = parser.unfold
+      UnfoldedParser(empty, Tag(resugarer, nonLeftRec), Tag(resugarer, leftRec))
+    }
   }
 
   final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
@@ -218,7 +256,7 @@ object Parser {
       val nonLefts = {
         val lnl = pn <*> q
         val rnl = pe.map(f => qn.map(f)).getOrElse(Empty)
-        rnl <|> lnl
+        lnl <|> rnl
       }
 
       UnfoldedParser(empty, nonLefts, lefts)
@@ -245,7 +283,7 @@ object Parser {
       // const id = \x -> \y -> y
       val f = Abs(x, Abs(y, y))
 
-      (p.map(f) <*> q).unfold
+      Tag(resugaring.thenResugarer, p.map(f) <*> q).unfold
     }
   }
   object Then {
@@ -385,11 +423,17 @@ object Parser {
     def parsers: List[Parser]
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+      // TODO: properly keep track if things were curried
       val liftedFunc: Parser = Pure(func match {
         case Translucent(f @ Term.Name(_), substs) if parsers.size > 1 => Translucent(q"$f.curried", substs)
         case _ => func.curried
       })
-      val curriedForm = parsers.foldLeft(liftedFunc)(_ <*> _)
+
+      val curriedForm = this match {
+        case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(liftedFunc)(_ <*> _))
+        case _ => parsers.foldLeft(liftedFunc)(_ <*> _)
+      }
+      // println(s"CURRIED>>> ${curriedForm.term.syntax}")
 
       curriedForm.unfold
     }
@@ -449,7 +493,8 @@ object Parser {
   }
 
   final case class Bridge(func: Expr, parsers: List[Parser]) extends LiftLike {
-    val term = q"${func.term}(..${parsers.map(_.term)})"
+    // val term = q"${func.term}(..${parsers.map(_.term)})"
+    val term = AppN(func, parsers.map(p => Translucent(p.term))).normalise.term
   }
   object Bridge {
     val matcher = SymbolMatcher.normalized(

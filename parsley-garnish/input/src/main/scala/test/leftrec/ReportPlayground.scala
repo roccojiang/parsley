@@ -1,6 +1,5 @@
 /*
 rule = FactorLeftRecursion
-FactorLeftRecursion.debugOptions = [reportNonTerminalLocations]
  */
 package test.leftrec
 
@@ -10,12 +9,9 @@ import parsley.syntax.zipped._
 import parsley.expr.chain
 
 object ReportPlayground {
-  val nt = item
-  val nt2 = nt
-  // lazy val example: Parsley[String] = (example, string("a")).zipped(_ + _) | string("b")
+  lazy val example: Parsley[String] = (example, string("a")).zipped(_ + _) | string("b")
   // ^^^^     ^^^^^^^  ^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   // mods      pats        decltpe                             rhs
-  // lazy val example: Parsley[String] = (example, string("a")).zipped(_ + _) | string("b")
 
   // def flip[A, B, C](f: A => B => C)(x: B)(y: A): C = f(y)(x)
   // def compose[A, B, C](f: B => C)(g: A => B)(x: A): C = f(g(x))
