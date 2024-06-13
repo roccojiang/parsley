@@ -37,7 +37,7 @@ object ExprTest {
   val incsWrong: Parsley[Expr] = Inc.lift(incsWrong) | Num(number)
   // val incsWrong = chain.postfix[Expr](number.map(Num(_)))(pure(x1 => Inc(x1))) // triggers parsley.exceptions.NonProductiveIterationException
   // TODO: Turn this into example of direct left-recursion? Easy postfix example
-  val incs: Parsley[Expr] = chain.postfix[Expr](Num(number))(char('+').map(x1 => x2 => Inc(x2)) | empty)
+  val incs: Parsley[Expr] = chain.postfix[Expr](Num(number))(char('+').map(x1 => x2 => Inc(x2)))
   // val incs = chain.postfix[Expr](number.map(Num(_)))(char('+').map(x1 => x2 => Inc(x2))) // almost good! except Num needed amending to Num(_) - tagging to turn it back into a bridge apply??
 
   def main(args: Array[String]): Unit = {

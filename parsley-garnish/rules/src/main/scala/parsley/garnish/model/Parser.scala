@@ -21,7 +21,20 @@ sealed abstract class Parser extends Product with Serializable {
   def normalise: Parser = this.rewrite { case Tag(_, p) => p }.simplify.normaliseExprs
 
   /* Simplify parsers and attempt to resguar them */
-  def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
+  // def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
+  // def prettify: Parser = {
+  //   println(s"Step 0: ${this.term.syntax}")
+  //   val step1 = this.simplify
+  //   println(s"Step 1: ${step1.term.syntax}")
+  //   val step2 = step1.resugar
+  //   println(s"Step 2: ${step2.term.syntax}")
+  //   val step3 = step2.simplify
+  //   println(s"Step 3: ${step3.term.syntax}")
+  //   val step4 = step3.normaliseExprs
+  //   println(s"Step 4: ${step4.term.syntax}")
+  //   step4
+  // }
+  def prettify = normalise.resugar
 
   /* Simplification via parser laws */
   private[garnish] def simplify: Parser = this.rewrite {
@@ -42,9 +55,11 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   /* Resugaring */
-  private[garnish] def resugar: Parser = this.transform {
+  private[garnish] def resugar: Parser = this.rewrite {
     // Targeted resugaring based on desugaring tags
-    case Tag(resugarer, parser) => parser.transform(resugarer)
+    case Tag(resugarer, parser) =>
+      // parser.transform(resugarer)
+      parser
 
   }.rewrite {
     // Generic resugaring rules that are run on all parsers
@@ -81,41 +96,8 @@ sealed abstract class Parser extends Product with Serializable {
     case Bridge(func, parsers) => Bridge(func.normalise, parsers)
   }
 
-  // private def apply[A](pf: PartialFunction[Parser, A]): Parser = {
-
-  // }
-
-  // private def transform0(pf: PartialFunction[Parser, Parser]): Parser = {
-  //   val yes = this.rewrite {
-  //     case Tag(_, p) => p
-  //   }
-  // }
-
-  // def applyPF[A](pf: PartialFunction[Parser, A]): A
-
   // Bottom-up transformation
   private def transform(pf: PartialFunction[Parser, Parser]): Parser = {
-    // Apply pf underneath resugaring tags, and rewrap them back
-    def pfApply(parser: Parser): Parser = parser match {
-      case Tag(resugarer, p) => Tag(resugarer, pfApply(p))
-      case _                 => pf(parser)
-    }
-
-    // def isPfDefinedAt(parser: Parser): Boolean = {
-    //   println("CHECKING IF DEFIND")
-    //   val result = pf.isDefinedAt(parser.rewrite {
-    //     case Tag(_, p) => p
-    //   })
-    //   println(s"DONE: $result")
-    //   result
-    // }
-
-    // def isPfDefinedAt(parser: Parser): Boolean = parser match {
-    //   case Ap(Tag(_, p), q) => pf.isDefinedAt(Ap(p, q))
-    //   case Tag(_, p) => isPfDefinedAt(p)
-    //   case _         => pf.isDefinedAt(parser)
-    // }
-
     val parser = this match {
       case Choice(p, q) => Choice(p.transform(pf), q.transform(pf))
       case Ap(p, q) => Ap(p.transform(pf), q.transform(pf))
@@ -139,7 +121,6 @@ sealed abstract class Parser extends Product with Serializable {
       case unk: Unknown => unk
     }
 
-    // if (isPfDefinedAt(parser)) pfApply(parser) else parser
     if (pf.isDefinedAt(parser)) pf(parser) else parser
   }
 
@@ -162,8 +143,7 @@ object Parser {
   }
 
   final case class Tag(resugarer: PartialFunction[Parser, Parser], parser: Parser) extends Parser {
-    // def term = parser.transform(resugarer).term
-    def term = parser.term
+    def term = q"TAGGED(${parser.term})"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       val UnfoldedParser(empty, nonLeftRec, leftRec) = parser.unfold
@@ -276,7 +256,7 @@ object Parser {
       val nonLefts = {
         val lnl = pn <*> q
         val rnl = pe.map(f => qn.map(f)).getOrElse(Empty)
-        rnl <|> lnl
+        lnl <|> rnl
       }
 
       UnfoldedParser(empty, nonLefts, lefts)
@@ -303,7 +283,7 @@ object Parser {
       // const id = \x -> \y -> y
       val f = Abs(x, Abs(y, y))
 
-      (p.map(f) <*> q).unfold
+      Tag(resugaring.thenResugarer, p.map(f) <*> q).unfold
     }
   }
   object Then {
@@ -453,7 +433,7 @@ object Parser {
         case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(liftedFunc)(_ <*> _))
         case _ => parsers.foldLeft(liftedFunc)(_ <*> _)
       }
-      // val curriedForm = parsers.foldLeft(liftedFunc)(_ <*> _)
+      // println(s"CURRIED>>> ${curriedForm.term.syntax}")
 
       curriedForm.unfold
     }

@@ -10,7 +10,7 @@ import parsley.garnish.model.Parser, Parser._
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
     val nonTerminals = getNonTerminalParserDefns.map { parserDefn =>
-      parserDefn.name.symbol -> (parserDefn.parser.normaliseExprs, parserDefn)
+      parserDefn.name.symbol -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
     // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
@@ -43,8 +43,6 @@ object Transformation {
       case Some(t) => Pure(t)
     }
 
-    // println(s">>>${parserDefn.name.syntax}<<< EMPTY = ${empties.prettify} | NONLEFTREC = ${nonLeftRec} | LEFTREC = ${leftRec.prettify}")
-
     leftRec.normalise match {
       case Empty => Left(Patch.empty)
       case _: Pure => Left(Patch.lint(
@@ -55,10 +53,10 @@ object Transformation {
       // addGlobalImport
       // perhaps add an importer for each parser, do a traversal at the end to collect all required imports
       // TODO: report can't left factor if there are impure parsers
-      case leftRec =>
-        val postfixed = Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec).prettify
-        println(s">>>${parserDefn.name.syntax}<<< = ${postfixed}")  
-        Right(postfixed)
+      case _ =>
+        val postfixed = Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec)
+        println(s">>>${parserDefn.name.syntax}<<< = ${postfixed.prettify}")
+        Right(postfixed.prettify)
     }
   }
 
