@@ -52,7 +52,7 @@ chain.postfix[Expr](number.map(x1 => Num(x1)))(pure(x1 => Inc(x1)))
   // ambiguous - this becomes right-associative?
   // val add: Parsley[Expr] = Add(add <~ "+", add) | Num(number)
   // val add: Parsley[Expr] = chain.postfix[Expr](Num(number))(string("+").map(x1 => (x2: Expr) => (x3: Expr) => Add.apply.curried(x3)(x2)) <*> add)
-  // TODO: example for non-associative weirdness?
+  // TODO: is it worth having a fully associative parser example?
   val add: Parsley[Expr] = Add(add, "+" ~> add) | Num(number)
   // OLD OUTPUT = chain.postfix[Expr](Num(number))(("+" ~> add).map(x1 => x2 => Add.apply.curried(x2)(x1))) // yessss fixed the appending curried issue by case 3 of inferring params of Term.Names
 

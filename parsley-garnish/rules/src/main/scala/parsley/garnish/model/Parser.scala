@@ -127,7 +127,7 @@ sealed abstract class Parser extends Product with Serializable {
 object Parser {
 
   case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
-  case class UnfoldedParser(empty: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
+  case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
     val isLeftRecursive = leftRec.normalise != Empty
   }
 
@@ -135,8 +135,8 @@ object Parser {
     def term = q"TAGGED(${parser.term})"
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      val UnfoldedParser(empty, nonLeftRec, leftRec) = parser.unfold
-      UnfoldedParser(empty, Tag(resugarer, nonLeftRec), Tag(resugarer, leftRec))
+      val UnfoldedParser(results, nonLeftRec, leftRec) = parser.unfold
+      UnfoldedParser(results, Tag(resugarer, nonLeftRec), Tag(resugarer, leftRec))
     }
   }
 
@@ -232,7 +232,7 @@ object Parser {
       val UnfoldedParser(pe, pn, pl) = p.unfold
       val UnfoldedParser(qe, qn, ql) = q.unfold
 
-      val empty =
+      val result =
         if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
         else None
 
@@ -248,7 +248,7 @@ object Parser {
         lnl <|> rnl
       }
 
-      UnfoldedParser(empty, nonLefts, lefts)
+      UnfoldedParser(result, nonLefts, lefts)
     }
   }
   object Ap {

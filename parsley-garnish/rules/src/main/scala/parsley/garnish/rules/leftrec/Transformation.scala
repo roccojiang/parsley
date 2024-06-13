@@ -38,16 +38,16 @@ object Transformation {
 
   /* Returns a parser transformed into postfix form if it is left-recursive. */
   private def transform(unfolded: UnfoldedParser, parserDefn: ParserDefinition): Either[Patch, Parser] = {
-    val UnfoldedParser(empty, nonLeftRec, leftRec) = unfolded
-    val empties = empty match {
-      case None => Empty
+    val UnfoldedParser(results, nonLeftRec, leftRec) = unfolded
+    val result = results match {
       case Some(t) => Pure(t)
+      case None    => Empty
     }
 
     leftRec.normalise match {
       case Empty => Left(Patch.empty)
       case _: Pure => Left(Patch.lint(
-        LeftRecDerivesEmptyLint(parserDefn, Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec).prettify)
+        LeftRecDerivesEmptyLint(parserDefn, Postfix(parserDefn.tpe, nonLeftRec <|> result, leftRec).prettify)
       ))
       // TODO: import postfix if not in scope
       // https://www.javadoc.io/doc/ch.epfl.scala/scalafix-core_2.12/0.12.1/scalafix/patch/Patch$.html
@@ -55,7 +55,7 @@ object Transformation {
       // perhaps add an importer for each parser, do a traversal at the end to collect all required imports
       // TODO: report can't left factor if there are impure parsers
       case _ =>
-        val postfixed = Postfix(parserDefn.tpe, nonLeftRec <|> empties, leftRec)
+        val postfixed = Postfix(parserDefn.tpe, nonLeftRec <|> result, leftRec)
         println(s">>>${parserDefn.name.syntax}<<< = ${postfixed.prettify}")
         Right(postfixed.prettify)
     }
