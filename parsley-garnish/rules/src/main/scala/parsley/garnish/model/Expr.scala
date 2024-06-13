@@ -93,44 +93,45 @@ object Expr {
   }
   object App {
     def apply(f: Expr, x: Expr): AppN = AppN(f, List(x))
+    def apply(f: Expr, xs: Expr*): Expr = xs.foldLeft(f)(App(_, _))
   }
 
   /* id : A => A */
   def id: Expr = {
-    val x = Var.fresh() // : A
+    // x: A
+    val x = Var.fresh()
+
     Abs(x, x)
   }
 
   /* flip : (A => B => C) => B => A => C */
   def flip: Expr = {
-    val f = Var.fresh() // : A => B => C
-    val x = Var.fresh() // : B
-    val y = Var.fresh() // : A
+    // f: A => B => C, x: B, y: A
+    val (f, x, y) = (Var.fresh(), Var.fresh(), Var.fresh())
 
     // \f -> \x -> \y -> f y x
-    Abs(f, Abs(x, Abs(y, App(App(f, y), x))))
+    Abs(f, Abs(x, Abs(y, App(f, y, x))))
   }
 
   /* compose : (B => C) => (A => B) => A => C */
   def compose: Expr = {
-    val f = Var.fresh() // : B => C
-    val g = Var.fresh() // : A => B
-    val x = Var.fresh() // : A
+    // f: B => C, g: A => B, x: A
+    val (f, g, x) = (Var.fresh(), Var.fresh(), Var.fresh())
 
     // \f -> \g -> \x -> f (g x)
     Abs(f, Abs(g, Abs(x, App(f, App(g, x)))))
   }
-  def composeH(f: Expr /* B => C */): Expr /* (A => B) => A => C) */ = App(compose, f)
-  def composeH(f: Expr /* B => C */ , g: Expr /* A => B */): Expr /* A => C */ = App(App(compose, f), g)
+  def compose(f: Expr /* B => C */): Expr /* (A => B) => A => C */ = App(compose, f)
+  def compose(f: Expr /* B => C */ , g: Expr /* A => B */): Expr /* A => C */ = App(compose, f, g)
 
   def cons: Expr = {
-    val x = Var.fresh() // : A
-    val xs = Var.fresh() // : List[A]
+    // x: A, xs: List[A]
+    val (x, xs) = (Var.fresh(), Var.fresh())
 
     // \x -> \xs -> x :: xs
     Abs(x, Abs(xs, App(App(Translucent(q"::"), x), xs))) // TODO: infix operators
   }
-  def consH(x: Expr, xs: Expr): Expr = App(App(cons, x), xs)
+  def cons(x: Expr, xs: Expr): Expr = App(cons, x, xs)
 }
 
 private sealed abstract class Sem extends Product with Serializable {

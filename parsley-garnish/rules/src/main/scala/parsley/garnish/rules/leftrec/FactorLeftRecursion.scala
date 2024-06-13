@@ -20,9 +20,6 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch = {
-    getNonTerminalParserDefns.map {
-      case ParserDefinition(name, _, _, originalTree) =>
-        Patch.lint(NonTerminalLint(originalTree.parent.getOrElse(originalTree), name.value))
-    }.asPatch
+    getNonTerminalParserDefns.map(defn => Patch.lint(DebugNonTerminalLint(defn))).asPatch
   }
 }

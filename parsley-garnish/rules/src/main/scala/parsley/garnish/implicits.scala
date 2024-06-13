@@ -18,7 +18,7 @@ object implicits {
   implicit class TermOps(private val term: Term) extends AnyVal {
     import model.{Expr, Parser}, Expr._, Parser._
 
-    def toFunction(debugName: String)(implicit doc: SemanticDocument): Expr = {
+    def toExpr(debugName: String)(implicit doc: SemanticDocument): Expr = {
       // parsley.garnish.utils.printInfo(term, debugName)
       // println(s"BUILDING FUNCTION FROM TERM: $term")
 
@@ -55,11 +55,10 @@ object implicits {
         // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
         // against matching multiple times using SymbolMatchers
 
-        // any other unrecognised term names will be assumed to be a non-terminal
-        // this is a conservative approach, it might assume some Parsley combinators are actually NTs?
-        case t: Term.Name => NonTerminal(t.symbol)
+        // TODO: is there a way to flip this round to check if the owner is the current file's package? I can't find a way to get this information
+        case t: Term.Name if !(t.symbol.owner.value startsWith "parsley/") => NonTerminal(t.symbol)
 
-        case unrecognisedTerm => Unknown(unrecognisedTerm)
+        case unrecognised => Unknown(unrecognised)
       }
     }
 
@@ -74,9 +73,12 @@ object implicits {
 
       val (reversedParamLists, body) = recurseParamLists(func, List.empty)
 
-      // Replace each method parameter with a fresh variable to preserve Barendregt's convention
+      // Hygiene: rename each parameter to its (unique?) symbol name
       val freshReplacements = reversedParamLists.reverse.map(_.collect {
-        case p @ Term.Param(_, _, decltpe, _) => p.symbol -> Var.fresh(Some("_l"), decltpe)
+        case p @ Term.Param(_, _, decltpe, _) =>
+          // TODO: placeholder parameters will not have symbols
+          // p.symbol -> Var(p.symbol.value, decltpe)
+          p.symbol -> Var.fresh(Some("_l"), decltpe)
       })
       val freshParams = freshReplacements.map(_.map(_._2))
       val symbolsMap = freshReplacements.flatten.toMap

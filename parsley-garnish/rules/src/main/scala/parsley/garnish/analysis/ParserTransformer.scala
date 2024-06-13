@@ -9,7 +9,9 @@ import parsley.garnish.implicits.TermOps
 
 object ParserTransformer {
 
-  final case class ParserDefinition(name: Term.Name, parser: Parser, tpe: Type.Name, originalTree: Term)
+  final case class ParserDefinition(name: Term.Name, parser: Parser, tpe: Type.Name, originalTree: Term) {
+    val definitionSite: Position = originalTree.parent.getOrElse(originalTree).pos
+  }
 
   def getNonTerminalParserDefns(implicit doc: SemanticDocument): Seq[ParserDefinition] =
     doc.tree.collect {
