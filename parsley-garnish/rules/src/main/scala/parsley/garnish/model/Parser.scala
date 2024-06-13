@@ -70,8 +70,9 @@ sealed abstract class Parser extends Product with Serializable {
     // Generic resugaring rules that should only be applied once, since RHS constructors overlap with LHS constructors
     // If applied using rewrite, it would never terminate
 
-    // Scala 2 cannot resolve implicit stringLift on "s".map(f)
+    // Scala 2 cannot resolve implicit stringLifts in some positions
     case FMap(Str(s, _), f) => FMap(Str(s, implicitSyntax = false), f)
+    case Zipped(f, Str(s, _) :: ps) => Zipped(f, Str(s, implicitSyntax = false) :: ps)
   }
 
   def normaliseExprs: Parser = this.transform {
@@ -411,9 +412,10 @@ object Parser {
     def parsers: List[Parser]
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      // TODO: properly keep track if things were curried
       val liftedFunc: Parser = Pure(func match {
-        case Translucent(f @ Term.Name(_), substs) if parsers.size > 1 => Translucent(q"$f.curried", substs)
+        // The dodgy case: had to treat the entire function as opaque
+        case Translucent(f, substs) if parsers.size > 1 => Translucent(q"$f.curried", substs) // TODO: keep track that this currying occurred?
+        // The normal case: this function should've been lifted to Expr correctly, so currying actually works normally
         case _ => func.curried
       })
 

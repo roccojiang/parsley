@@ -9,24 +9,25 @@ import parsley.garnish.model.Parser, Parser._
 
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
-    val nonTerminals = getNonTerminalParserDefns.map { parserDefn =>
+    val nonTerminals = getNonTerminalParserDefns.map(_.name.symbol)
+    val grammarMap = getNonTerminalParserDefns.map { parserDefn =>
       parserDefn.name.symbol -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
     // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
     // Also collect lints emitted during the transformation process
-    val lints = nonTerminals.keysIterator.toSeq.map { sym =>
-      val unfolded = unfold(nonTerminals.view.mapValues(_._2).toMap, sym)
-      val (orig, parserDefn) = nonTerminals(sym)
+    val lints = nonTerminals.map { sym =>
+      val unfolded = unfold(grammarMap.view.mapValues(_._2).toMap, sym)
+      val (orig, parserDefn) = grammarMap(sym)
       transform(unfolded, parserDefn) match {
         case Left(patch) => patch
         case Right(transformedParser) =>
-          nonTerminals(sym) = (orig, parserDefn.copy(parser = transformedParser))
+          grammarMap(sym) = (orig, parserDefn.copy(parser = transformedParser))
           Patch.empty
       }
     }.asPatch
 
-    val rewrites = nonTerminals.values.collect {
+    val rewrites = grammarMap.values.collect {
       case (original, ParserDefinition(_, transformed, _, originalTree)) if !original.isEquivalent(transformed) =>
         Patch.replaceTree(originalTree, transformed.term.syntax)
     }.asPatch

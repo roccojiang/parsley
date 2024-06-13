@@ -4,6 +4,7 @@ import scala.collection.mutable
 import scala.meta._
 import scala.meta.contrib._
 import scalafix.v1._
+import parsley.garnish.analysis.TypeSignatureAnalyzer.getInferredTypeSignature
 
 object implicits {
   implicit class TreeOps(private val tree: Tree) extends AnyVal {
@@ -25,6 +26,11 @@ object implicits {
       val func = term match {
         case f: Term.Function => buildFromFunctionTerm(f)
         case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)
+        case f: Term.Name =>
+          // TODO: infer types, but these are SemanticTypes and we need scala.meta.Type
+          val params = getInferredTypeSignature(f).map(_.map(_ => Var.fresh(Some("_b"), None)))
+          val body = params.foldLeft[Expr](Translucent(term))(AppN(_, _))
+          params.foldRight[Expr](body)(AbsN(_, _))
         case _ => Translucent(term)
       }
 
