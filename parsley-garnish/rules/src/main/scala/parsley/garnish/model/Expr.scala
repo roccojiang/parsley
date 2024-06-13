@@ -27,7 +27,7 @@ sealed abstract class Expr extends Product with Serializable {
         case Sem.Abs(_, g) => g(xs.map(eval(_, boundVars)))
         case g => Sem.App(g, xs.map(eval(_, boundVars)))
       }
-      case Translucent(term, env) =>
+      case Translucent(term, env, _) =>
         Sem.Translucent(term, env.view.mapValues(eval(_, boundVars)).toMap)
     }
 
@@ -40,7 +40,7 @@ sealed abstract class Expr extends Product with Serializable {
 object Expr {
   type VarName = String
 
-  final case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty) extends Expr {
+  final case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty, isCurried: Boolean = false) extends Expr {
     private val transformer = new Transformer {
       override def apply(tree: Tree): Tree = tree match {
         case name: Term.Name =>
@@ -55,7 +55,13 @@ object Expr {
       }
     }
 
-    val term = transformer(originalTerm).asInstanceOf[Term]
+    val term = {
+      val t = transformer(originalTerm).asInstanceOf[Term]
+      if (isCurried) q"$t.curried" else t
+    }
+  }
+  object Translucent_ {
+    def unapply(x: Translucent): Option[(Term, Map[VarName, Expr])] = Some((x.originalTerm, x.env))
   }
 
   final case class Var(name: VarName, displayType: Option[Type]) extends Expr {

@@ -414,7 +414,7 @@ object Parser {
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       val liftedFunc: Parser = Pure(func match {
         // The dodgy case: had to treat the entire function as opaque
-        case Translucent(f, substs) if parsers.size > 1 => Translucent(q"$f.curried", substs) // TODO: keep track that this currying occurred?
+        case Translucent_(f, substs) if parsers.size > 1 => Translucent(f, substs, isCurried = true)
         // The normal case: this function should've been lifted to Expr correctly, so currying actually works normally
         case _ => func.curried
       })

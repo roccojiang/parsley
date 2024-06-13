@@ -63,17 +63,15 @@ chain.postfix[Expr](number.map(x1 => Num(x1)))(pure(x1 => Inc(x1)))
   case class VarB(v: String) extends Expr
   object VarB extends ParserBridge1[String, VarB]
 
+  // TODO: indirect recursion example - whatever rule comes first will inline the rest, so that's the rule to be run
   object varBridge {
     lazy val indirectA: Parsley[Expr] = Pair(indirectB, VarB("hi"))
     lazy val indirectB = indirectA | VarB("ho")
   }
   object varLift {
-    lazy val indirectA: Parsley[Expr] = Pair(indirectB, Var.lift("hi"))
     lazy val indirectB = indirectA | Var.lift("ho")
+    lazy val indirectA: Parsley[Expr] = Pair(indirectB, Var.lift("hi"))
   }
-  // lazy val indirectA: Parsley[Expr] = chain.postfix[Expr](string("ho").map(x1 => Pair.curried(Var(x1))) <*> Var.lift("hi"))(Var.lift("hi").map(x1 => x2 => Pair.curried(x2)(x1))) // doesn't work well if Var is a bridge
-  // lazy val indirectA: Parsley[Expr] = chain.postfix[Expr](string("ho").map(x1 => Pair.curried(Var(x1))) <*> Var.lift("hi"))(Var.lift("hi").map(x1 => x2 => Pair(x2, x1)))
-  //                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ uncurrying to zipped can't trigger here, because "Pair.curried(Var(x1))" is translucent, so we can't tell that it's got form "x1 => x2 => body"
 
   // chain p op = postfix p (flip <$> op <*> p)
 
