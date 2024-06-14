@@ -131,4 +131,6 @@ object implicits {
       AbsN(params, lambdaBody)
     }
   }
+
+  implicit class PatchOps(private val patch: Patch) extends AnyVal {}
 }

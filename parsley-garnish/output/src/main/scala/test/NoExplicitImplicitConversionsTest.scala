@@ -15,7 +15,7 @@ object NoExplicitImplicitConversionsTest {
   object charSyntaxLifts {
     object FullyQualified {
       import parsley.syntax.character.stringLift
-      val strLift = "parsley" <~> string("garnish")
+      val strLift = string("parsley") <~> "garnish"
       import parsley.syntax.character.charLift
       val chrLift = 'p' <~> string("arsley")
     }
@@ -28,6 +28,12 @@ object NoExplicitImplicitConversionsTest {
       val strLift = "parsley" <~> string("garnish")
       import character.charLift
       val chrLift = 'p' <~> string("arsley")
+
+      def main(args: Array[String]): Unit = {
+        // Make sure the import gets applied the line above, and doesn't mangle the current line
+        import character.charLift
+        println(string("pars") ~> string("le") ~> 'y')
+      }
     }
 
     object Imported {
