@@ -1,4 +1,5 @@
 parsley.garnish.rules.AmbiguousImplicitConversions
+parsley.garnish.rules.NoExplicitImplicitConversions
 parsley.garnish.rules.SimplifyParser
 parsley.garnish.rules.AvoidParserRedefinition
 parsley.garnish.rules.leftrec.FactorLeftRecursion

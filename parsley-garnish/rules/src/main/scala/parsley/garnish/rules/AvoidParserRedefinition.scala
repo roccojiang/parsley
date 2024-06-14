@@ -20,6 +20,6 @@ class AvoidParserRedefinition extends SemanticRule("AvoidParserRedefinition") {
   }
 
   def redefinitions: PartialFunction[Parser, Parser] = {
-    case Many(p <~ sep) => EndBy(p, sep)
+    case ManyP(p <~ sep) => EndBy(p, sep)
   }
 }
