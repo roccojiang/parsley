@@ -14,8 +14,6 @@ object Transformation {
       parserDefn.name.symbol -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
-    // println(nonTerminals)
-
     // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
     // Also collect lints emitted during the transformation process
     val lints = nonTerminals.map { sym =>

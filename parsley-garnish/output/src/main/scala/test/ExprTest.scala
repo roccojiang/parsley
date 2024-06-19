@@ -19,7 +19,7 @@ object ExprTest {
      * f.xxx(x, y)
      * f(x, y)
    */
-  
+
   // TODO: partial functions not modelled in Expr type
 
   case class One(x: Int)

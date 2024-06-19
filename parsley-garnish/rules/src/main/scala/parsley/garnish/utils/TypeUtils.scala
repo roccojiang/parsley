@@ -29,5 +29,5 @@ object TypeUtils {
     case _ => None
   }
 
-  private val parsleyMatcher = SymbolMatcher.normalized("parsley.Parsley")
+  private val parsleyMatcher = SymbolMatcher.normalized("parsley.Parsley", "parsley.quick.Parsley")
 }

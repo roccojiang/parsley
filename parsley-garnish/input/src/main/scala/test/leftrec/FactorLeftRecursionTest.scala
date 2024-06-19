@@ -16,7 +16,7 @@ object FactorLeftRecursionTest {
     case class Inc(x: Expr) extends Expr
 
     val incsWrong: Parsley[Expr] = Inc.lift(incsWrong) | Num.lift(number)/* assert: FactorLeftRecursion
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Left-recursion detected, but could not be removed from incsWrong.
 The resulting chain would be given a parser which consumes no input, causing it to loop indefinitely:
 chain.postfix[Expr](number.map(x1 => Num(x1)))(pure(x1 => Inc(x1)))
@@ -116,8 +116,10 @@ chain.postfix[Int](some(digit) ~> a2)(pure(x1 => x1))
   }
 
   object PotentialTodos {
-    // TODO: lint issues with lazy positions?
-    lazy val simpleBad: Parsley[String] = string("a") <|> simpleBad // will stack overflow for input "a", due to strict positions
-    lazy val simpleGood: Parsley[String] = string("a") <|> ~simpleGood // will still infinitely recurse on any input other than "a", obviously
+    // TODO: properly consider issues with lazy positions?
+    // Will stack overflow for input "a", due to strict positions    
+    // lazy val simpleBad: Parsley[String] = string("a") <|> simpleBad
+    // Will still infinitely recurse on any input other than "a", obviously
+    // lazy val simpleGood: Parsley[String] = string("a") <|> ~simpleGood
   }
 }
