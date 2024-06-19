@@ -34,7 +34,10 @@ object TypeSignatureAnalyzer {
 
   def getInferredTypeSignature(term: Term.Name)(implicit doc: SemanticDocument): TypeSignature = {
     val signatureTypeList = {
+      // TODO: this is horrible
       val signatureShape = term.symbol.info.map(extractParamListsTypes)
+      if (signatureShape.exists(_.exists(_.exists(_.isGeneric)))) None
+      else signatureShape.map(_.map(_.map(_.asInstanceOf[ConcreteType])))
     }
 
     val syntheticsTypeList = term.synthetics collect {
@@ -58,10 +61,11 @@ object TypeSignatureAnalyzer {
         substituteTypes(signatureShape.get, concreteTypeArgs) // TODO: handle optional properly
     }
     assert(syntheticsTypeList.length <= 1, s"expected at most one inferred type signature from synthetics, got $syntheticsTypeList")
+    println(s"syntheticsTypeList: $syntheticsTypeList")
 
-    // signatureTypeList.getOrElse(syntheticsTypeList.headOption.getOrElse(List.empty))
+    signatureTypeList.getOrElse(syntheticsTypeList.headOption.getOrElse(List.empty))
 
-    syntheticsTypeList.headOption.getOrElse(List.empty)
+    // syntheticsTypeList.headOption.getOrElse(List.empty)
   }
 
   def substituteTypes(typeSignature: List[List[MethodParamType]], concreteTypes: List[ConcreteType]): TypeSignature = {
