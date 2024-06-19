@@ -8,6 +8,7 @@ import parsley.Parsley
 import parsley.Parsley.empty
 import parsley.character.string
 
+// TODO: refactor this to be decoupled from FactorLeftRecursion rule
 /**
   * Unit tests for the detection of non-terminals in order to perform auto-factoring of left recursion.
   * 
@@ -18,15 +19,17 @@ object FindNonTerminalsTest {
 
   val notAParser = List(1) ++ List(2)
 
-  val p: Parsley[String] = string("Thyme") // assert: FactorLeftRecursion
-  var q = string("Rosemary") // assert: FactorLeftRecursion
-  lazy val r: Parsley[Unit] = empty.void /* assert: FactorLeftRecursion
-  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-r was detected to be a non-terminal.
+  val p: Parsley[String] = string("thyme") /* assert: FactorLeftRecursion
+  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+p was detected to be a non-terminal, and parsed as:
+Str(thyme,false)
 */
 
+  var q = string("rosemary") // assert: FactorLeftRecursion
+  lazy val r: Parsley[Unit] = empty.void // assert: FactorLeftRecursion
+
   def add(a: String)(b: String) = a + b
-  val s = p.map(add) <*> string("Sage") // assert: FactorLeftRecursion
+  val s = p.map(add) <*> string("sage") // assert: FactorLeftRecursion
 
   def t[A](p: Parsley[A]): Parsley[(A, String)] = p <~> q // TODO: I don't believe this should be detected as a non-terminal?
 
@@ -44,6 +47,6 @@ r was detected to be a non-terminal.
     // sbt garnishInput/run
 
     val p = t(s) // assert: FactorLeftRecursion
-    println(p.parse("ThymeSageRosemary"))
+    println(p.parse("thymesagerosemary"))
   }
 }
