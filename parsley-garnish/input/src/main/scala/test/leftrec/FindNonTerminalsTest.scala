@@ -7,6 +7,7 @@ package test.leftrec
 import parsley.Parsley
 import parsley.Parsley.empty
 import parsley.character.string
+import parsley.expr.chain
 
 // TODO: refactor this to be decoupled from FactorLeftRecursion rule
 /**

@@ -124,10 +124,10 @@ sealed abstract class Parser extends Product with Serializable {
   // override def toString: String = term.syntax
 }
 
-// TODO: https://github.com/j-mie6/parsley/issues/236 opaque-style tagging?
 object Parser {
+  type Grammar = Map[Symbol, ParserDefinition]
 
-  case class UnfoldingContext(visited: Set[Symbol], env: Map[Symbol, ParserDefinition], nonTerminal: Symbol)
+  case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
   case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
     val isLeftRecursive = leftRec.normalise != Empty
   }
@@ -145,7 +145,7 @@ object Parser {
     val term = Term.Name(ref.info.get.displayName)
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      assert(ctx.env.contains(ref), s"expected to find non-terminal $ref in this file")
+      assert(ctx.env.contains(ref), s"expected to find non-terminal $ref in this file, instead found: ${ctx.env.keys}")
 
       // val tpe = getParsleyType(ref)
       // assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
