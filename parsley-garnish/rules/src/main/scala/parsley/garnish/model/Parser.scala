@@ -57,7 +57,7 @@ sealed abstract class Parser extends Product with Serializable {
     // p.map(\x -> \y -> x) <*> q == p <~ q
     case FMap(p, Abs(Var(x, _), Abs(_, Var(z, _)))) <*> q if (x == z) => p <~ q
 
-    // f.curried.map(p) <*> q == (p, q).zipped(f)
+    // p.map(f.curried) <*> q == (p, q).zipped(f)
     // TODO: up to 22 args
     case FMap(p1, Abs(x1, Abs(x2, body))) <*> p2 =>
       Zipped(AbsN(List(x1, x2), body), List(p1, p2))
@@ -104,6 +104,7 @@ sealed abstract class Parser extends Product with Serializable {
       case Tag(resugarer, p) => Tag(resugarer, p.transform(pf))
 
       case s: Str => s
+      case c: Chr => c
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
@@ -156,7 +157,12 @@ object Parser {
       } else {
         val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
 
-        if (!unfoldedRef.isLeftRecursive) {
+        // println(s"UNFOLDEDREF $ref: ${unfoldedRef.results} ### ${unfoldedRef.nonLeftRec.prettify} ### ${unfoldedRef.leftRec.prettify}")
+
+        if (unfoldedRef.results.isDefined) {
+          unfoldedRef
+          // UnfoldedParser(None, NonTerminal(ref), Empty)
+        } else if (!unfoldedRef.isLeftRecursive) {
           // the non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly,
           // rather than aggressively inlining it
           UnfoldedParser(None, NonTerminal(ref), Empty)
@@ -208,7 +214,6 @@ object Parser {
       val UnfoldedParser(pe, pn, pl) = p.unfold
       val UnfoldedParser(qe, qn, ql) = q.unfold
 
-      // TODO: originally in the paper this was pe.xor(qe), but I think that's not true under PEG semantics?
       UnfoldedParser(pe.orElse(qe), pn | qn, pl | ql)
     }
   }
@@ -367,9 +372,8 @@ object Parser {
   final case class Str(s: String, implicitSyntax: Boolean = false) extends Parser {
     val term = if (implicitSyntax) Lit.String(s) else q"string($s)"
 
-    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser =
       UnfoldedParser(None, this, Empty)
-    }
   }
   object Str {
     val stringLiftMatcher = SymbolMatcher.normalized("parsley.syntax.character.stringLift")
@@ -382,6 +386,27 @@ object Parser {
       case s @ Lit.String(str) if s.synthetics.exists(cond(_) {
         case ApplyTree(IdTree(symInfo), _) => stringLiftMatcher.matches(symInfo.symbol)
       }) => Str(str, implicitSyntax = true)
+    }
+  }
+
+  /* char(s): Parser[Char] */
+  final case class Chr(c: Char, implicitSyntax: Boolean = false) extends Parser {
+    val term = if (implicitSyntax) Lit.Char(c) else q"char($c)"
+
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser =
+      UnfoldedParser(None, this, Empty)
+  }
+  object Chr {
+    val charLiftMatcher = SymbolMatcher.normalized("parsley.syntax.character.charLift")
+    val matcher = SymbolMatcher.normalized("parsley.character.char")
+
+    def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Chr] = {
+      case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(Lit.Char(chr)), _)) =>
+        Chr(chr, implicitSyntax = false)
+
+      case s @ Lit.Char(chr) if s.synthetics.exists(cond(_) {
+        case ApplyTree(IdTree(symInfo), _) => charLiftMatcher.matches(symInfo.symbol)
+      }) => Chr(chr, implicitSyntax = true)
     }
   }
 
@@ -433,7 +458,7 @@ object Parser {
           case Term.ApplyType.After_4_6_0(g, _) => g
           case _ => f
         }
-        LiftImplicit(func.toExpr("LIFT_IMPLICIT"), ps.map(_.toParser))
+        LiftImplicit(func.toExpr("LIFT_IMPLICIT", Some(ps.size)), ps.map(_.toParser))
     }
   }
 
@@ -450,7 +475,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftExplicit] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(f :: ps, _)) =>
-        LiftExplicit(f.toExpr("LIFT_EXPLICIT"), ps.map(_.toParser))
+        LiftExplicit(f.toExpr("LIFT_EXPLICIT", Some(ps.size)), ps.map(_.toParser))
     }
   }
 
@@ -466,13 +491,12 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {
       case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), matcher(_)), Term.ArgClause(List(f), _)) =>
-        Zipped(f.toExpr("ZIPPED"), ps.map(_.toParser))
+        Zipped(f.toExpr("ZIPPED", Some(ps.size)), ps.map(_.toParser))
     }
   }
 
   final case class Bridge(func: Expr, parsers: List[Parser]) extends LiftLike {
-    // val term = q"${func.term}(..${parsers.map(_.term)})"
-    val term = AppN(func, parsers.map(p => Translucent(p.term))).normalise.term
+    val term = q"${func.term}(..${parsers.map(_.term)})"
   }
   object Bridge {
     val matcher = SymbolMatcher.normalized(
@@ -483,7 +507,7 @@ object Parser {
       case Term.Apply.After_4_6_0(func, ps) if func.synthetics.exists(cond(_) {
           case SelectTree(_, IdTree(symInfo)) => matcher.matches(symInfo.symbol)
       }) =>
-        Bridge(func.toExpr("BRIDGE"), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
+        Bridge(func.toExpr("BRIDGE", Some(ps.size)), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
   }
 

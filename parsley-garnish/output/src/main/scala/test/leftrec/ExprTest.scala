@@ -64,6 +64,14 @@ object ExprTest {
     lazy val indirectA: Parsley[Expr] = Pair(indirectB, Var.lift("hi"))
   }
 
+  object introduction {
+    val number: Parsley[Float] = digit.foldLeft1(0)((n, d) => n * 10 + d.asDigit).map(_.toFloat)
+
+    lazy val expr: Parsley[Float] = chain.postfix[Float](term)((char('+') ~> term).map(x1 => x2 => x2 + x1) | (char('-') ~> term).map(x1 => x2 => x2 - x1))
+    lazy val term: Parsley[Float] = chain.postfix[Float](atom)((char('*') ~> atom).map(x1 => x2 => x2 * x1) | (char('/') ~> atom).map(x1 => x2 => x2 / x1))
+    lazy val atom: Parsley[Float] = char('(') ~> expr <~ char(')') | number
+  }
+
   // chain p op = postfix p (flip <$> op <*> p)
 
   // val hidden = ???

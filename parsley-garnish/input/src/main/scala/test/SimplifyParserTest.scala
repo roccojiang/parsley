@@ -27,7 +27,7 @@ object SimplifyParserTest {
 
   val fmapLeftAbsorb = empty.map(s => add(s, "sage"))
 
-  val fmapHomomorphism = pure("parsley").map(s => add(s, "wasabi"))
+  val fmapHomomorphism = pure("parsley").map(add(_, "wasabi"))
 
   val fmapComposition = string("saffron").map(s => add(s, "tarragon")).map(s => add(s, "turmeric"))
 

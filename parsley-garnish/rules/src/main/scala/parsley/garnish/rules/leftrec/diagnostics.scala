@@ -20,7 +20,7 @@ case class LeftRecDerivesEmptyLint(parserDefn: ParserDefinition, transformed: Pa
   override def position: Position = parserDefn.definitionSite
   override def severity: LintSeverity = LintSeverity.Error
   override def message: String =
-    s"""Left-recursion could not be removed from ${parserDefn.name.syntax}.
+    s"""Left-recursion detected, but could not be removed from ${parserDefn.name.syntax}.
        |The resulting chain would be given a parser which consumes no input, causing it to loop indefinitely:
        |${transformed.term.syntax}
      """.stripMargin

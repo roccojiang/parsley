@@ -33,8 +33,14 @@ object ExprTest {
   lazy val negate: Parsley[Expr] = Neg(string("negate") ~> negate) | atom
   lazy val atom: Parsley[Expr] = (char('(') ~> expr <~ char(')')) | Num(number)
 
-  lazy val ruleA = ruleB.map(a => b => a + b) <*> string("a") | string("a")
-  lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
+  object abab {
+    lazy val ruleA = ruleB.map(a => b => a + b) <*> string("a") | string("a")
+    lazy val ruleB: Parsley[String] = ruleA.map(a => b => a + b) <*> string("b") | string("b")
+
+    def concat(x: String)(y: String): String = x + y
+    lazy val ruleAHidden: Parsley[String] = pure(concat) <*> ruleBHidden <*> string("a") | string("a")
+    lazy val ruleBHidden: Parsley[String] = pure(concat) <*> ruleAHidden <*> string("b") | string("b")
+  }
 
   lazy val p: Parsley[String] = (p, string("a")).zipped(_ + _) | string("b")
 
@@ -42,7 +48,7 @@ object ExprTest {
   // triggers parsley.exceptions.NonProductiveIterationException if factored out
   val incsWrong: Parsley[Expr] = Inc.lift(incsWrong) | Num(number)/* assert: FactorLeftRecursion
   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Left-recursion could not be removed from incsWrong.
+Left-recursion detected, but could not be removed from incsWrong.
 The resulting chain would be given a parser which consumes no input, causing it to loop indefinitely:
 chain.postfix[Expr](number.map(x1 => Num(x1)))(pure(x1 => Inc(x1)))
 */
@@ -74,9 +80,6 @@ chain.postfix[Expr](number.map(x1 => Num(x1)))(pure(x1 => Inc(x1)))
   }
 
   // chain p op = postfix p (flip <$> op <*> p)
-
-  // val hidden = ???
-  // val derivesEmpty = pure()
 
   def main(args: Array[String]): Unit = {
     // println(incs.parse("1+++"))

@@ -19,7 +19,7 @@ object implicits {
   implicit class TermOps(private val term: Term) extends AnyVal {
     import model.{Expr, Parser}, Expr._, Parser._
 
-    def toExpr(debugName: String)(implicit doc: SemanticDocument): Expr = {
+    def toExpr(debugName: String, numParams: Option[Int] = None)(implicit doc: SemanticDocument): Expr = {
       // parsley.garnish.utils.printInfo(term, debugName)
       // println(s"BUILDING FUNCTION FROM TERM: $term")
 
@@ -28,7 +28,14 @@ object implicits {
         case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)
         case f: Term.Name =>
           // TODO: infer types, but these are SemanticTypes and we need scala.meta.Type
-          val params = getInferredTypeSignature(f).map(_.map(_ => Var.fresh(Some("_b"), None)))
+          val inferredTypeSig = getInferredTypeSignature(f)
+          val params = if (inferredTypeSig.isEmpty && numParams.isDefined) {
+            // backup approach: if given the number of parameters passed to the invocation of this function, create that many placeholders
+            // honestly, given the current implementation, this seems better than inference since we can't get the types
+            List(List.fill(numParams.get)(Var.fresh(Some("_b"), None)))
+          } else {
+            inferredTypeSig.map(_.map(_ => Var.fresh(Some("_b"), None)))
+          }
           val body = params.foldLeft[Expr](Translucent(term))(AppN(_, _))
           params.foldRight[Expr](body)(AbsN(_, _))
         case _ => Translucent(term)
@@ -49,6 +56,7 @@ object implicits {
         FMap.fromTerm,
         ManyP.fromTerm,
         SomeP.fromTerm,
+        Chr.fromTerm,
         Str.fromTerm,
         LiftImplicit.fromTerm,
         LiftExplicit.fromTerm,

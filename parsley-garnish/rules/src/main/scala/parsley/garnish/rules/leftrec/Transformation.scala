@@ -44,6 +44,8 @@ object Transformation {
       case None    => Empty
     }
 
+    println(s"###${parserDefn.name.syntax}### = ${result.prettify} ### ${nonLeftRec.prettify} ### ${leftRec.prettify}")
+
     leftRec.normalise match {
       case Empty => Left(Patch.empty)
       case _: Pure => Left(Patch.lint(
