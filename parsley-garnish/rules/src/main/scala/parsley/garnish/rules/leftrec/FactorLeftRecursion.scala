@@ -2,8 +2,8 @@ package parsley.garnish.rules.leftrec
 
 import scalafix.v1._
 
-import Transformation.removeLeftRecursion
-import parsley.garnish.analysis.ParserTransformer.getNonTerminalParserDefns
+import parsley.garnish.rules.leftrec.Transformation.removeLeftRecursion
+import parsley.garnish.analysis.ParserTransformer.getParserDefinitions
 
 class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRule("FactorLeftRecursion") {
   def this() = this(FactorLeftRecursionConfig.default)
@@ -20,5 +20,5 @@ class FactorLeftRecursion(config: FactorLeftRecursionConfig) extends SemanticRul
   }
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch =
-    getNonTerminalParserDefns.map(defn => Patch.lint(DebugNonTerminalLint(defn))).asPatch
+    getParserDefinitions().map(defn => Patch.lint(DebugNonTerminalLint(defn))).asPatch
 }

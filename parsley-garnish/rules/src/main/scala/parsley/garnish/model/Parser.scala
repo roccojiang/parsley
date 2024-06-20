@@ -4,9 +4,9 @@ import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
-import Expr._
+import parsley.garnish.analysis.ParserTransformer.Grammar
 import parsley.garnish.implicits.TermOps
-import parsley.garnish.analysis.ParserTransformer.ParserDefinition
+import parsley.garnish.model.Expr._
 
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
@@ -115,7 +115,6 @@ sealed abstract class Parser extends Product with Serializable {
 }
 
 object Parser {
-  type Grammar = Map[Symbol, ParserDefinition]
 
   case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
   case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {

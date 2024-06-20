@@ -4,14 +4,14 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserTransformer.{getNonTerminalParserDefns, ParserDefinition}
+import parsley.garnish.analysis.ParserTransformer._
 import parsley.garnish.model.Parser, Parser._
 
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
-    val nonTerminals = getNonTerminalParserDefns.map(_.name.symbol)
-    val grammarMap = getNonTerminalParserDefns.map { parserDefn =>
-      parserDefn.name.symbol -> (parserDefn.parser, parserDefn)
+    val nonTerminals = getParserDefinitions().map(_.name.symbol)
+    val grammarMap = getGrammarMap().map { 
+      case (sym, parserDefn) => sym -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
     // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
