@@ -4,7 +4,7 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserTransformer._
+import parsley.garnish.lifting.ParserLifter._
 import parsley.garnish.model.Parser, Parser._
 
 object Transformation {

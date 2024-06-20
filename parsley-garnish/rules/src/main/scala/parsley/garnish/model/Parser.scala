@@ -4,7 +4,7 @@ import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserTransformer.Grammar
+import parsley.garnish.lifting.ParserLifter.Grammar
 import parsley.garnish.implicits.TermOps
 import parsley.garnish.model.Expr._
 
@@ -21,7 +21,7 @@ sealed abstract class Parser extends Product with Serializable {
   def normalise: Parser = simplify.normaliseExprs
 
   /* Simplify parsers and attempt to resugar them */
-  def prettify = normalise.resugar
+  def prettify: Parser = normalise.resugar
 
   /* Simplification via parser laws */
   def simplify: Parser = this.rewrite {

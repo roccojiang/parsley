@@ -5,7 +5,7 @@ import scala.meta._
 import scala.meta.contrib._
 import scalafix.v1._
 
-import parsley.garnish.analysis.TypeSignatureAnalyzer.getInferredTypeSignature
+import parsley.garnish.lifting.TypeSignatureAnalyzer.getInferredTypeSignature
 
 object implicits {
   implicit class TreeOps(private val tree: Tree) extends AnyVal {

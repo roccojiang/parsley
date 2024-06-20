@@ -5,7 +5,7 @@ import scalafix.lint.LintSeverity
 import scalafix.v1.Diagnostic
 
 import parsley.garnish.model.Parser
-import parsley.garnish.analysis.ParserTransformer.ParserDefinition
+import parsley.garnish.lifting.ParserLifter.ParserDefinition
 
 case class DebugNonTerminalLint(parserDefn: ParserDefinition) extends Diagnostic {
   override def position: Position = parserDefn.definitionSite

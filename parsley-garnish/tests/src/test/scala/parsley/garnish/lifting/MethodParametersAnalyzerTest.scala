@@ -1,4 +1,4 @@
-package parsley.garnish.analysis
+package parsley.garnish.lifting
 
 import org.scalactic.Equality
 import org.scalatest.Assertion

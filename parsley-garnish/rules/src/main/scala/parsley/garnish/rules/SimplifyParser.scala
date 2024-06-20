@@ -3,7 +3,7 @@ package parsley.garnish.rules
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.analysis.ParserTransformer.{getParserDefinitions, ParserDefinition}
+import parsley.garnish.lifting.ParserLifter.{getParserDefinitions, ParserDefinition}
 
 class SimplifyParser extends SemanticRule("SimplifyParser") {
   override def fix(implicit doc: SemanticDocument): Patch = {

@@ -1,4 +1,4 @@
-package parsley.garnish.analysis
+package parsley.garnish.lifting
 
 import scala.meta._
 import scalafix.v1._
@@ -7,7 +7,7 @@ import parsley.garnish.model.Parser
 import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 import parsley.garnish.implicits.TermOps
 
-object ParserTransformer {
+object ParserLifter {
 
   type Grammar = Map[Symbol, ParserDefinition]
 
