@@ -36,6 +36,7 @@ sealed abstract class Expr extends Product with Serializable {
 }
 
 object Expr {
+
   type VarName = String
 
   final case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty, isCurried: Boolean = false) extends Expr {

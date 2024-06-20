@@ -4,7 +4,7 @@ import scala.meta._
 import scalafix.lint.LintSeverity
 import scalafix.v1.Diagnostic
 
-import parsley.garnish.model.Parser
+import parsley.garnish.model.parser.Parser
 import parsley.garnish.lifting.ParserLifter.ParserDefinition
 
 case class DebugNonTerminalLint(parserDefn: ParserDefinition) extends Diagnostic {

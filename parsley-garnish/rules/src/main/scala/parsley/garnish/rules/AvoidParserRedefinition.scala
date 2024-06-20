@@ -3,7 +3,7 @@ package parsley.garnish.rules
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.model.Parser, Parser._
+import parsley.garnish.model.parser.Parser, Parser._
 import parsley.garnish.lifting.ParserLifter.{getParserDefinitions, ParserDefinition}
 
 class AvoidParserRedefinition extends SemanticRule("AvoidParserRedefinition") {

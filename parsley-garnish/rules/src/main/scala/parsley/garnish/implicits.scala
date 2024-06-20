@@ -18,7 +18,11 @@ object implicits {
   }
 
   implicit class TermOps(private val term: Term) extends AnyVal {
-    import model.{Expr, Parser}, Expr._, Parser._
+    import parsley.garnish.lifting.ParserLifter
+    import parsley.garnish.model.parser.Parser
+    import parsley.garnish.model.Expr, Expr._
+
+    def toParser(implicit doc: SemanticDocument): Parser = ParserLifter.lift(term)
 
     def toExpr(numParams: Int = 1)(implicit doc: SemanticDocument): Expr = term match {
       case f: Term.Function          => buildFromFunctionTerm(f)
@@ -37,38 +41,6 @@ object implicits {
         params.foldRight[Expr](body)(AbsN(_, _))
 
       case _ => Translucent(term)
-    }
-
-    def toParser(implicit doc: SemanticDocument): Parser = {
-      val transforms: PartialFunction[Term, Parser] = Seq(
-        Pure.fromTerm,
-        Empty.fromTerm,
-        <|>.fromTerm,
-        <*>.fromTerm,
-        ~>.fromTerm,
-        <~.fromTerm,
-        FMap.fromTerm,
-        ManyP.fromTerm,
-        SomeP.fromTerm,
-        Chr.fromTerm,
-        Str.fromTerm,
-        LiftImplicit.fromTerm,
-        LiftExplicit.fromTerm,
-        Zipped.fromTerm,
-        Bridge.fromTerm,
-        EndBy.fromTerm,
-      ).reduce(_ orElse _)
-
-      if (transforms.isDefinedAt(term)) transforms(term)
-      else term match {
-        // See https://scalacenter.github.io/scalafix/docs/developers/symbol-matcher.html#unapplytree for how to mitigate
-        // against matching multiple times using SymbolMatchers
-
-        // TODO: is there a way to flip this round to check if the owner is the current file's package? I can't find a way to get this information
-        case t: Term.Name if !(t.symbol.owner.value startsWith "parsley/") => NonTerminal(t.symbol)
-
-        case unrecognised => Unknown(unrecognised)
-      }
     }
 
     private def buildFromFunctionTerm(func: Term.Function)(implicit doc: SemanticDocument): Expr = {
