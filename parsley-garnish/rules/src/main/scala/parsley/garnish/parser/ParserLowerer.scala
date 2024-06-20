@@ -1,8 +1,8 @@
-package parsley.garnish.model.parser
+package parsley.garnish.parser
 
 import scala.meta._
 
-import parsley.garnish.model.parser.Parser, Parser._
+import Parser._
 
 private[parser] object ParserLowerer {
   def lower(parser: Parser): Term = parser match {

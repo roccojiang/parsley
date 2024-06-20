@@ -1,13 +1,12 @@
-package parsley.garnish.lifting
+package parsley.garnish.parser
 
 import scala.PartialFunction.cond
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.model.parser.matchers
-import parsley.garnish.model.parser.Parser, Parser._
-import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 import parsley.garnish.implicits.TermOps
+import parsley.garnish.parser.Parser._
+import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 
 object ParserLifter {
 

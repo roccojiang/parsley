@@ -1,4 +1,4 @@
-package parsley.garnish.lifting
+package parsley.garnish.expr
 
 import org.scalactic.Equality
 import org.scalatest.Assertion
@@ -10,7 +10,7 @@ import scala.meta._
 import scala.meta.contrib._
 import scala.reflect.ClassTag
 
-import MethodParametersAnalyzer._
+import parsley.garnish.expr.MethodParametersAnalyzer._
 
 class MethodParametersAnalyzerTest extends AnyFlatSpec with Matchers {
   implicit def termEq[T <: Term : ClassTag] = new Equality[T] {

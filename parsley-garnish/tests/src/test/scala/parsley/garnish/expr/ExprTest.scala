@@ -1,11 +1,11 @@
-package parsley.garnish.model
+package parsley.garnish.expr
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.meta._
 
-import Expr._
+import parsley.garnish.expr.Expr._
 
 class ExprTest extends AnyFlatSpec with Matchers {
   "Nested translucent expressions" should "splice correctly" in {

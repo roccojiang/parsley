@@ -4,9 +4,10 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.lifting.ParserLifter._
-import parsley.garnish.model.Expr, Expr._
-import parsley.garnish.model.parser.Parser, Parser._
+import parsley.garnish.parser.ParserLifter._
+import parsley.garnish.expr.Expr, Expr._
+import parsley.garnish.parser.Parser
+import Parser._
 
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
@@ -58,10 +59,10 @@ object Transformation {
     }
   }
 
-  case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
+  private case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
     val isLeftRecursive = leftRec.normalise != Parser.Empty
   }
-  case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
+  private case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
 
   private def unfoldProduction(env: Grammar, nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedParser = {
     implicit val emptyCtx = UnfoldingContext(Set.empty, env, nonTerminal)

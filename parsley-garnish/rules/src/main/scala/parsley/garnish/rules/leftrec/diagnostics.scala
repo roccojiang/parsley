@@ -3,9 +3,8 @@ package parsley.garnish.rules.leftrec
 import scala.meta._
 import scalafix.lint.LintSeverity
 import scalafix.v1.Diagnostic
-
-import parsley.garnish.model.parser.Parser
-import parsley.garnish.lifting.ParserLifter.ParserDefinition
+import parsley.garnish.parser.ParserLifter.ParserDefinition
+import parsley.garnish.parser.Parser
 
 case class DebugNonTerminalLint(parserDefn: ParserDefinition) extends Diagnostic {
   override def position: Position = parserDefn.definitionSite

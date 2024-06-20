@@ -1,13 +1,13 @@
-package parsley.garnish.model.parser
+package parsley.garnish.parser
 
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.model.Expr, Expr._
+import parsley.garnish.expr.Expr, Expr._
 
 /**
-  * The root type of the intermediate Parser AST, defined as an ADT modelled on an expanded version of the
-  * Parsley combinator tree.
+  * The root type of the intermediate Parser AST.
+  * Modelled as an expanded version of the Parsley combinator tree, representing all composite combinators as well.
   */
 sealed abstract class Parser extends Product with Serializable {
   import Parser._

@@ -1,4 +1,4 @@
-package parsley.garnish.model.parser
+package parsley.garnish.parser
 
 import scalafix.v1.SymbolMatcher
 
