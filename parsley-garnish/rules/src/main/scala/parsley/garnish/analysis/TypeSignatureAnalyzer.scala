@@ -61,11 +61,8 @@ object TypeSignatureAnalyzer {
         substituteTypes(signatureShape.get, concreteTypeArgs) // TODO: handle optional properly
     }
     assert(syntheticsTypeList.length <= 1, s"expected at most one inferred type signature from synthetics, got $syntheticsTypeList")
-    println(s"syntheticsTypeList: $syntheticsTypeList")
 
     signatureTypeList.getOrElse(syntheticsTypeList.headOption.getOrElse(List.empty))
-
-    // syntheticsTypeList.headOption.getOrElse(List.empty)
   }
 
   def substituteTypes(typeSignature: List[List[MethodParamType]], concreteTypes: List[ConcreteType]): TypeSignature = {
