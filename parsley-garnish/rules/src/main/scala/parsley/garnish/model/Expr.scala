@@ -33,8 +33,6 @@ sealed abstract class Expr extends Product with Serializable {
 
     eval(this, Map.empty)
   }
-
-  // override def toString: String = term.syntax
 }
 
 object Expr {

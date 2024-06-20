@@ -4,6 +4,7 @@ import scala.collection.mutable
 import scala.meta._
 import scala.meta.contrib._
 import scalafix.v1._
+
 import parsley.garnish.analysis.TypeSignatureAnalyzer.getInferredTypeSignature
 
 object implicits {

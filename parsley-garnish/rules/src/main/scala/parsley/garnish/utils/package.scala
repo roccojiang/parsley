@@ -24,7 +24,6 @@ package object utils {
     val signature = tree.symbol.info.map(_.signature.structure)
     if (signature.isDefined)
       println(s"> SIGNATURE ${tree.syntax.takeWhile(_ != '\n')}: ${signature.get}")
-    // println(s"> SIGNATURE ${tree.syntax.takeWhile(_ != '\n')}: ${signature}")
       tree.children.foreach(recursivelyPrintSignature)
   }
 

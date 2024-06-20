@@ -17,11 +17,10 @@ sealed abstract class Parser extends Product with Serializable {
 
   def isEquivalent(other: Parser): Boolean = this.normalise == other.normalise
 
-  /* Faster(?) than prettification, used for equivalence checking */
-  def normalise: Parser = this.rewrite { case Tag(_, p) => p }.simplify.normaliseExprs
+  /* Used for equivalence checking */
+  def normalise: Parser = simplify.normaliseExprs
 
   /* Simplify parsers and attempt to resugar them */
-  // def prettify: Parser = this.simplify.resugar.simplify.normaliseExprs
   def prettify = normalise.resugar
 
   /* Simplification via parser laws */
@@ -44,11 +43,6 @@ sealed abstract class Parser extends Product with Serializable {
 
   /* Resugaring */
   def resugar: Parser = this.rewrite {
-    // TODO: Targeted resugaring based on desugaring tags
-    case Tag(_, parser) => parser
-      // parser.transform(resugarer)
-
-  }.rewrite {
     // Generic resugaring rules that are run on all parsers
 
     // p.map(\x -> \y -> y) <*> q == p ~> q
@@ -101,8 +95,6 @@ sealed abstract class Parser extends Product with Serializable {
       case Bridge(f, ps) => Bridge(f, ps.map(_.transform(pf)))
       case EndBy(p, sep) => EndBy(p.transform(pf), sep.transform(pf))
 
-      case Tag(resugarer, p) => Tag(resugarer, p.transform(pf))
-
       case s: Str => s
       case c: Chr => c
       case p: Pure => p
@@ -120,8 +112,6 @@ sealed abstract class Parser extends Product with Serializable {
 
     this.transform(pf0)
   }
-
-  // override def toString: String = term.syntax
 }
 
 object Parser {
@@ -132,23 +122,11 @@ object Parser {
     val isLeftRecursive = leftRec.normalise != Empty
   }
 
-  final case class Tag(resugarer: PartialFunction[Parser, Parser], parser: Parser) extends Parser {
-    def term = q"TAGGED(${parser.term})"
-
-    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      val UnfoldedParser(results, nonLeftRec, leftRec) = parser.unfold
-      UnfoldedParser(results, Tag(resugarer, nonLeftRec), Tag(resugarer, leftRec))
-    }
-  }
-
   final case class NonTerminal(ref: Symbol)(implicit doc: SemanticDocument) extends Parser {
     val term = Term.Name(ref.info.get.displayName)
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
       assert(ctx.env.contains(ref), s"expected to find non-terminal $ref in this file, instead found: ${ctx.env.keys}")
-
-      // val tpe = getParsleyType(ref)
-      // assert(tpe.isDefined, s"expected a Parsley type for $ref, got ${ref.info.get.signature}")
 
       if (ref == ctx.nonTerminal) {
         UnfoldedParser(None, Empty, Pure(id))
@@ -157,17 +135,13 @@ object Parser {
       } else {
         val unfoldedRef = ctx.env(ref).parser.unfold(ctx.copy(visited = ctx.visited + ref), doc)
 
-        // println(s"UNFOLDEDREF $ref: ${unfoldedRef.results} ### ${unfoldedRef.nonLeftRec.prettify} ### ${unfoldedRef.leftRec.prettify}")
-
-        if (unfoldedRef.results.isDefined) {
-          unfoldedRef
-          // UnfoldedParser(None, NonTerminal(ref), Empty)
-        } else if (!unfoldedRef.isLeftRecursive) {
-          // the non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly,
+        if (unfoldedRef.results.isEmpty && !unfoldedRef.isLeftRecursive) {
+          // The non-terminal we recursively unfolded was not left-recursive, so we just reference its name directly,
           // rather than aggressively inlining it
           UnfoldedParser(None, NonTerminal(ref), Empty)
         } else {
-          // in the left-recursive case, we must inline the result of the unfolded non-terminal
+          // In the left-recursive case, or if it has a semantic action,
+          // we must inline the result of the unfolded non-terminal
           unfoldedRef
         }
       }
@@ -271,7 +245,7 @@ object Parser {
       // const id = \x -> \y -> y
       val f = Abs(x, Abs(y, y))
 
-      Tag(resugaring.thenResugarer, p.map(f) <*> q).unfold
+      (p.map(f) <*> q).unfold
     }
   }
   object ~> {
@@ -432,11 +406,7 @@ object Parser {
         case _ => func.curried
       })
 
-      val curriedForm = this match {
-        case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(curriedFunc)(_ <*> _))
-        case _         => parsers.foldLeft(curriedFunc)(_ <*> _)
-      }
-      curriedForm.unfold
+      parsers.foldLeft(curriedFunc)(_ <*> _).unfold
     }
   }
 
@@ -526,9 +496,8 @@ object Parser {
   final case class Unknown(unrecognisedTerm: Term) extends Parser {
     val term = unrecognisedTerm
 
-    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
+    override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser =
       UnfoldedParser(None, this, Empty)
-    }
   }
 
   implicit class ParserOps(private val p: Parser) extends AnyVal {

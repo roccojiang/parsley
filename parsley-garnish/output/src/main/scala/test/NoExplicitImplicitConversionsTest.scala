@@ -29,7 +29,7 @@ object NoExplicitImplicitConversionsTest {
       import character.charLift
       val chrLift = 'p' <~> string("arsley")
 
-      def main(args: Array[String]): Unit = {
+      def foo(): Unit = {
         // Make sure the import gets applied the line above, and doesn't mangle the current line
         import character.charLift
         println(string("pars") ~> string("le") ~> 'y')

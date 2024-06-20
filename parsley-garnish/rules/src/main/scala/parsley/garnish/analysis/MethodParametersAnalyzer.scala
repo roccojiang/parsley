@@ -49,7 +49,6 @@ object MethodParametersAnalyzer {
     * and they will be returned without having their types updated.
    */
   def updateFuncArgTypes(argsLists: List[List[FuncArgument]], typeSignature: TypeSignature): List[List[FuncArgument]] = {
-    println(s">> argsLists: $argsLists")
     if (argsLists.length != typeSignature.length) argsLists
     else {
       argsLists.zip(typeSignature).map { case (args, types) =>
