@@ -27,7 +27,6 @@ object MethodParametersAnalyzer {
     recurse(t).reverse
   }
 
-  // TODO: can we specialise f to be just a Term.Function?
   def getFuncArguments(f: Term): List[List[FuncArgument]] = {
     @annotation.tailrec
     def getFuncBody(f: Term): Term = f match {

@@ -187,7 +187,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Pure] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(List(func), _)) =>
-        Pure(func.toExpr("PURE"))
+        Pure(func.toExpr())
     }
   }
 
@@ -317,7 +317,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, FMap] = {
       case Term.Apply.After_4_6_0(Term.Select(qual, matcher(_)), Term.ArgClause(List(func), _)) =>
-        FMap(qual.toParser, func.toExpr("MAP"))
+        FMap(qual.toParser, func.toExpr())
     }
   }
 
@@ -425,7 +425,7 @@ object Parser {
     def parsers: List[Parser]
 
     override def unfold(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = {
-      val liftedFunc: Parser = Pure(func match {
+      val curriedFunc: Parser = Pure(func match {
         // The dodgy case: had to treat the entire function as opaque
         case Translucent_(f, substs) if parsers.size > 1 => Translucent(f, substs, isCurried = true)
         // The normal case: this function should've been lifted to Expr correctly, so currying actually works normally
@@ -433,11 +433,9 @@ object Parser {
       })
 
       val curriedForm = this match {
-        case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(liftedFunc)(_ <*> _))
-        case _ => parsers.foldLeft(liftedFunc)(_ <*> _)
+        case _: Bridge => Tag(resugaring.bridgeApply, parsers.foldLeft(curriedFunc)(_ <*> _))
+        case _         => parsers.foldLeft(curriedFunc)(_ <*> _)
       }
-      // println(s"CURRIED>>> ${curriedForm.term.syntax}")
-
       curriedForm.unfold
     }
   }
@@ -458,7 +456,7 @@ object Parser {
           case Term.ApplyType.After_4_6_0(g, _) => g
           case _ => f
         }
-        LiftImplicit(func.toExpr("LIFT_IMPLICIT", Some(ps.size)), ps.map(_.toParser))
+        LiftImplicit(func.toExpr(ps.size), ps.map(_.toParser))
     }
   }
 
@@ -475,7 +473,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, LiftExplicit] = {
       case Term.Apply.After_4_6_0(matcher(_), Term.ArgClause(f :: ps, _)) =>
-        LiftExplicit(f.toExpr("LIFT_EXPLICIT", Some(ps.size)), ps.map(_.toParser))
+        LiftExplicit(f.toExpr(ps.size), ps.map(_.toParser))
     }
   }
 
@@ -491,7 +489,7 @@ object Parser {
 
     def fromTerm(implicit doc: SemanticDocument): PartialFunction[Term, Zipped] = {
       case Term.Apply.After_4_6_0(Term.Select(Term.Tuple(ps), matcher(_)), Term.ArgClause(List(f), _)) =>
-        Zipped(f.toExpr("ZIPPED", Some(ps.size)), ps.map(_.toParser))
+        Zipped(f.toExpr(ps.size), ps.map(_.toParser))
     }
   }
 
@@ -507,7 +505,7 @@ object Parser {
       case Term.Apply.After_4_6_0(func, ps) if func.synthetics.exists(cond(_) {
           case SelectTree(_, IdTree(symInfo)) => matcher.matches(symInfo.symbol)
       }) =>
-        Bridge(func.toExpr("BRIDGE", Some(ps.size)), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
+        Bridge(func.toExpr(ps.size), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
       }
   }
 
