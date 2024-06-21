@@ -94,9 +94,11 @@ object Transformation {
     val UnfoldedParser(pe, pn, pl) = unfold(p)
     val UnfoldedParser(qe, qn, ql) = unfold(q)
 
-    val result =
-      if (pe.isDefined && qe.isDefined) Some(App(pe.get, qe.get)) // pure f <*> pure x = pure (f x)
-      else None
+    // pure f <*> pure x = pure (f x)
+    val result = for {
+      f <- pe
+      x <- qe
+    } yield App(f, x)
 
     val lefts = {
       val llr = pl.map(flip) <*> q
