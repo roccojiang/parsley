@@ -2,6 +2,7 @@ package parsley.garnish.rules
 
 import scala.meta._
 import scalafix.v1._
+
 class NoExplicitImplicitConversions extends SemanticRule("NoExplicitImplicitConversions") {
 
   private val implicitConv = SymbolMatcher.normalized(

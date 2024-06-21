@@ -9,8 +9,11 @@ object matchers {
   val choice = SymbolMatcher.normalized("parsley.Parsley.`|`", "parsley.Parsley.`<|>`")
   val ap = SymbolMatcher.normalized("parsley.Parsley.`<*>`")
 
-  /* Lift parsers */
+  /* Result changing parsers */
   val map = SymbolMatcher.normalized("parsley.Parsley.map")
+  val as = SymbolMatcher.normalized("parsley.Parsley.as", "parsley.Parsley.#>")
+
+  /* Lifting parsers */
   val liftExplicit = SymbolMatcher.normalized(
     (1 to 22).map(i => s"parsley.lift.lift$i"): _*
   )
@@ -33,13 +36,15 @@ object matchers {
   val string = SymbolMatcher.normalized("parsley.character.string")
   val charLift = SymbolMatcher.normalized("parsley.syntax.character.charLift")
   val char = SymbolMatcher.normalized("parsley.character.char")
+  val digit = SymbolMatcher.normalized("parsley.character.digit")
 
   /* Sequencing parsers */
   val `then` = SymbolMatcher.normalized("parsley.Parsley.`~>`", "parsley.Parsley.`*>`")
   val thenDiscard = SymbolMatcher.normalized("parsley.Parsley.`<~`", "parsley.Parsley.`<*`")
 
   /* Chaining parsers */
-  // TODO: postfix
+  val postfix = SymbolMatcher.normalized("parsley.expr.chain.postfix")
+  val left1 = SymbolMatcher.normalized("parsley.expr.chain.left1")
 
   /* Iterative parsers */
   val many = SymbolMatcher.normalized("parsley.ParsleyImpl.many")

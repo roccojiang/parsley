@@ -12,7 +12,7 @@ object ParserLifter {
   def lift(term: Term)(implicit doc: SemanticDocument): Parser = term match {
     /* Core parsers (excluding non-terminals) */
     case Term.Apply.After_4_6_0(matchers.pure(_), Term.ArgClause(List(func), _)) =>
-      Pure(func.toExpr())
+      Pure(func.toExpr(numParams = 1))
     case matchers.empty(Term.Name(_)) =>
       Empty
     case Term.ApplyInfix.After_4_6_0(p, matchers.choice(_), _, Term.ArgClause(List(q), _)) =>
@@ -20,9 +20,15 @@ object ParserLifter {
     case Term.ApplyInfix.After_4_6_0(p, matchers.ap(_), _, Term.ArgClause(List(q), _)) =>
       p.toParser <*> q.toParser
 
-    /* Lifting parsers */
+    /* Result changing parsers */
     case Term.Apply.After_4_6_0(Term.Select(qual, matchers.map(_)), Term.ArgClause(List(func), _)) =>
-      FMap(qual.toParser, func.toExpr())
+      FMap(qual.toParser, func.toExpr(numParams = 1))
+    case Term.ApplyInfix.After_4_6_0(p, matchers.as(_), _, Term.ArgClause(List(x), _)) => // p as x
+      As(p.toParser, x.toExpr(numParams = 1))
+    case Term.Apply.After_4_6_0(Term.Select(p, matchers.as(_)), Term.ArgClause(List(x), _)) => // p.as(x)
+      As(p.toParser, x.toExpr(numParams = 1))
+
+    /* Lifting parsers */
     case Term.Apply.After_4_6_0(matchers.liftExplicit(_), Term.ArgClause(f :: ps, _)) =>
       LiftExplicit(f.toExpr(ps.size), ps.map(_.toParser))
     case Term.Apply.After_4_6_0(Term.Select(f, matchers.liftImplicit(_)), Term.ArgClause(ps, _)) =>
@@ -39,22 +45,30 @@ object ParserLifter {
       Bridge(func.toExpr(ps.size), ps.map(_.toParser)) // directly mapping over the ArgClause without unpacking it seems to work fine
 
     /* Character parsers */
-    case Term.Apply.After_4_6_0(matchers.string(_), Term.ArgClause(List(Lit.String(str)), _)) =>
-      Str(str, implicitSyntax = false)
-    case s @ Lit.String(str) if s.synthetics.exists(cond(_) {
+    case Term.Apply.After_4_6_0(matchers.string(_), Term.ArgClause(List(str), _)) =>
+      Str(str.toExpr(), implicitSyntax = false)
+    case s: Lit.String if s.synthetics.exists(cond(_) {
       case ApplyTree(IdTree(symInfo), _) => matchers.stringLift.matches(symInfo.symbol)
-    }) => Str(str, implicitSyntax = true)
-    case Term.Apply.After_4_6_0(matchers.char(_), Term.ArgClause(List(Lit.Char(chr)), _)) =>
-      Chr(chr, implicitSyntax = false)
-    case s @ Lit.Char(chr) if s.synthetics.exists(cond(_) {
+    }) => Str(s.toExpr(), implicitSyntax = true)
+    case Term.Apply.After_4_6_0(matchers.char(_), Term.ArgClause(List(chr), _)) =>
+      Chr(chr.toExpr(), implicitSyntax = false)
+    case c: Lit.Char if c.synthetics.exists(cond(_) {
       case ApplyTree(IdTree(symInfo), _) => matchers.charLift.matches(symInfo.symbol)
-    }) => Chr(chr, implicitSyntax = true)
+    }) => Chr(c.toExpr(), implicitSyntax = true)
+    case matchers.digit(Term.Name(_)) =>
+      Digit
 
     /* Sequencing parsers */
     case Term.ApplyInfix.After_4_6_0(p, matchers.then(_), _, Term.ArgClause(List(q), _)) =>
       p.toParser ~> q.toParser
     case Term.ApplyInfix.After_4_6_0(p, matchers.thenDiscard(_), _, Term.ArgClause(List(q), _)) =>
       p.toParser <~ q.toParser
+
+    /* Chaining parsers */
+    case Term.Apply.After_4_6_0(Term.Apply.After_4_6_0(matchers.postfix(_), Term.ArgClause(List(p), _)), Term.ArgClause(List(op), _)) =>
+      Postfix(None, p.toParser, op.toParser)
+    case Term.Apply.After_4_6_0(Term.Apply.After_4_6_0(matchers.left1(_), Term.ArgClause(List(p), _)), Term.ArgClause(List(op), _)) =>
+      Left1(None, p.toParser, op.toParser)
 
     /* Iterative parsers */
     case Term.Apply.After_4_6_0(matchers.many(_), Term.ArgClause(List(p), _)) =>

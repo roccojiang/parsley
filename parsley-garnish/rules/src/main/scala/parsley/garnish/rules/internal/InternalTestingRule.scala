@@ -21,5 +21,5 @@ private[internal] class InternalTestingRule(config: InternalTestingRuleConfig) e
   }
 
   private def lintNonTerminalLocations(implicit doc: SemanticDocument): Patch =
-    getParserDefinitions().map(defn => Patch.lint(DebugNonTerminalLint(defn))).asPatch
+    getParserDefinitions(includeDefDefinitions = false).map(defn => Patch.lint(DebugNonTerminalLint(defn))).asPatch
 }

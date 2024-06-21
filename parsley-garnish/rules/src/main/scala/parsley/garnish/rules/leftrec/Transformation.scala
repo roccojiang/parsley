@@ -1,52 +1,28 @@
 package parsley.garnish.rules.leftrec
 
-import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
 import parsley.garnish.expr.Expr, Expr._
-import parsley.garnish.parser.GrammarExtractor._
+import parsley.garnish.parser.GrammarExtractor.{Grammar, ParserDefinition}
 import parsley.garnish.parser.Parser, Parser._
 
 object Transformation {
-  def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {
-    val nonTerminals = getParserDefinitions().map(_.name.symbol)
-    val grammarMap = getGrammarMap().map { 
-      case (sym, parserDefn) => sym -> (parserDefn.parser, parserDefn)
-    }.to(mutable.Map)
 
-    // Rewrite transformed parsers back into the map of non-terminals, if they have been transformed
-    // Also collect lints emitted during the transformation process
-    val lints = nonTerminals.map { sym =>
-      val unfolded = unfoldProduction(grammarMap.view.mapValues(_._2).toMap, sym)
-      val (orig, parserDefn) = grammarMap(sym)
-      transform(unfolded, parserDefn) match {
-        case Left(patch) => patch
-        case Right(transformedParser) =>
-          grammarMap(sym) = (orig, parserDefn.copy(parser = transformedParser))
-          Patch.empty
-      }
-    }.asPatch
-
-    val rewrites = grammarMap.values.collect {
-      case (original, ParserDefinition(_, transformed, _, originalTree)) if !original.isEquivalent(transformed) =>
-        Patch.replaceTree(originalTree, transformed.term.syntax)
-    }.asPatch
-
-    // TODO: make patches atomic?
-    // TODO: more principled manner of determining which imports to add
-    lints + rewrites + Patch.addGlobalImport(importer"parsley.expr.chain")
+  private[leftrec] case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
+    val isLeftRecursive = leftRec.normalise != Parser.Empty
   }
+  private[leftrec] case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
 
   /* Returns a parser transformed into postfix form if it is left-recursive. */
-  private def transform(unfolded: UnfoldedParser, parserDefn: ParserDefinition): Either[Patch, Parser] = {
+  def transform(unfolded: UnfoldedParser, parserDefn: ParserDefinition): Either[Patch, Parser] = {
     val UnfoldedParser(results, nonLeftRec, leftRec) = unfolded
     val result = results match {
       case Some(t) => Pure(t)
       case None    => Empty
     }
 
-    val transformed = Postfix(parserDefn.tpe, nonLeftRec | result, leftRec).prettify
+    val transformed = Postfix(Some(parserDefn.tpe), nonLeftRec | result, leftRec).prettify
 
     leftRec.normalise match {
       // Not left-recursive, do not rewrite
@@ -58,18 +34,14 @@ object Transformation {
     }
   }
 
-  private case class UnfoldedParser(results: Option[Expr], nonLeftRec: Parser, leftRec: Parser) {
-    val isLeftRecursive = leftRec.normalise != Parser.Empty
-  }
-  private case class UnfoldingContext(visited: Set[Symbol], env: Grammar, nonTerminal: Symbol)
-
-  private def unfoldProduction(env: Grammar, nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedParser = {
+  def unfoldProduction(env: Grammar, nonTerminal: Symbol)(implicit doc: SemanticDocument): UnfoldedParser = {
     implicit val emptyCtx = UnfoldingContext(Set.empty, env, nonTerminal)
     unfold(env(nonTerminal).parser)
   }
 
   private def unfold(parser: Parser)(implicit ctx: UnfoldingContext, doc: SemanticDocument): UnfoldedParser = parser match {
     case p: CoreParser => unfoldCore(p)
+    case p: ResultChangingParser => unfoldResChange(p)
     case p: LiftParser => unfoldLift(p)
     case p: CharacterParser => UnfoldedParser(None, p, Empty)
     case p: SequenceParser => unfoldSeq(p)
@@ -141,17 +113,20 @@ object Transformation {
     UnfoldedParser(result, nonLefts, lefts)
   }
 
-  private def unfoldLift(p: LiftParser)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = p match {
+  private def unfoldResChange(p: ResultChangingParser)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = p match {
     case FMap(p, f) => unfold(Pure(f) <*> p)
-    case _ => 
-      val curriedFunc: Parser = Pure(p.func match {
-        // The dodgy case: had to treat the entire function as opaque
-        case Translucent_(f, substs) if p.parsers.size > 1 => Translucent(f, substs, isCurried = true)
-        // The normal case: this function should've been lifted to Expr correctly, so currying actually works normally
-        case _ => p.func.curried
-      })
+    case As(p, x) => unfold(p ~> Pure(x)) // perhaps the p.map(_ => x) definition may be better?
+  }
 
-      unfold(p.parsers.foldLeft(curriedFunc)(_ <*> _))
+  private def unfoldLift(p: LiftParser)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = {
+    val curriedFunc: Parser = Pure(p.func match {
+      // The dodgy case: had to treat the entire function as opaque
+      case Translucent_(f, substs) if p.parsers.size > 1 => Translucent(f, substs, isCurried = true)
+      // The normal case: this function should've been lifted to Expr correctly, so currying actually works normally
+      case _ => p.func.curried
+    })
+
+    unfold(p.parsers.foldLeft(curriedFunc)(_ <*> _))
   }
 
   private def unfoldSeq(p: SequenceParser)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = p match {

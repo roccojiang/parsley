@@ -68,13 +68,17 @@ sealed abstract class Parser extends Product with Serializable {
     case Zipped(f, Str(s, _) :: ps) => Zipped(f, Str(s, implicitSyntax = false) :: ps)
   }
 
-  def normaliseExprs: Parser = this.transform {
-    case Pure(f) => Pure(f.normalise)
-    case FMap(p, f) => FMap(p, f.normalise)
-    case LiftImplicit(func, parsers) => LiftImplicit(func.normalise, parsers)
-    case LiftExplicit(func, parsers) => LiftExplicit(func.normalise, parsers)
-    case Zipped(func, parsers) => Zipped(func.normalise, parsers)
-    case Bridge(func, parsers) => Bridge(func.normalise, parsers)
+  def normaliseExprs: Parser = transformExprs(_.normalise)
+  def etaReduceExprs: Parser = transformExprs(_.etaReduce)
+
+  def transformExprs(f: Expr => Expr): Parser = this.transform {
+    case Pure(x) => Pure(f(x))
+    case FMap(p, func) => FMap(p, f(func))
+    case As(p, x) => As(p, f(x))
+    case LiftImplicit(func, parsers) => LiftImplicit(f(func), parsers)
+    case LiftExplicit(func, parsers) => LiftExplicit(f(func), parsers)
+    case Zipped(func, parsers) => Zipped(f(func), parsers)
+    case Bridge(func, parsers) => Bridge(f(func), parsers)
   }
 
   // Bottom-up transformation
@@ -85,8 +89,10 @@ sealed abstract class Parser extends Product with Serializable {
       case p ~> q  => ~>(p.transform(pf), q.transform(pf))
       case p <~ q  => <~(p.transform(pf), q.transform(pf))
       case FMap(p, f) => FMap(p.transform(pf), f)
+      case As(p, x) => As(p.transform(pf), x)
       case ManyP(p) => ManyP(p.transform(pf))
       case SomeP(p) => SomeP(p.transform(pf))
+      case Left1(tpe, p, op) => Left1(tpe, p.transform(pf), op.transform(pf))
       case Postfix(tpe, p, op) => Postfix(tpe, p.transform(pf), op.transform(pf))
       case LiftImplicit(f, ps) => LiftImplicit(f, ps.map(_.transform(pf)))
       case LiftExplicit(f, ps) => LiftExplicit(f, ps.map(_.transform(pf)))
@@ -96,6 +102,7 @@ sealed abstract class Parser extends Product with Serializable {
 
       case s: Str => s
       case c: Chr => c
+      case Digit => Digit
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
@@ -122,12 +129,13 @@ object Parser {
   final case class <|>(p: Parser /* Parser[A] */, q: Parser /* Parser[A] */) extends CoreParser /* Parser[A] */
   final case class <*>(p: Parser /* Parser[A => B] */, q: Parser /* Parser[A] */) extends CoreParser /* Parser[B] */
 
+  sealed trait ResultChangingParser extends Parser
+  final case class FMap(p: Parser /* Parser[A] */, func: Expr /* Expr[A => B] */) extends ResultChangingParser /* Parser[B] */
+  final case class As(p: Parser /* Parser[_] */, x: Expr /* Expr[A] */) extends ResultChangingParser /* Parser[A] */
+
   sealed trait LiftParser extends Parser {
     val func: Expr
     val parsers: List[Parser]
-  }
-  final case class FMap(p: Parser /* Parser[A] */, func: Expr /* Expr[A => B] */) extends LiftParser /* Parser[B] */ {
-    val parsers = List(p)
   }
   /* func: Expr[(T1, ..., TN) => R], p1: Parser[T1], pN: Parser[TN]*/
   final case class LiftExplicit(func: Expr, parsers: List[Parser]) extends LiftParser /* Parser[R] */
@@ -136,15 +144,17 @@ object Parser {
   final case class Bridge(func: Expr, parsers: List[Parser]) extends LiftParser /* Parser[R] */
 
   sealed trait CharacterParser extends Parser
-  final case class Str(s: String, implicitSyntax: Boolean = false) extends CharacterParser /* Parser[String] */
-  final case class Chr(c: Char, implicitSyntax: Boolean = false) extends CharacterParser /* Parser[Char] */
+  final case class Str(s: Expr /* Expr[String] */, implicitSyntax: Boolean = false) extends CharacterParser /* Parser[String] */
+  final case class Chr(c: Expr /* Expr[Char] */, implicitSyntax: Boolean = false) extends CharacterParser /* Parser[Char] */
+  final case object Digit extends CharacterParser /* Parser[Char] */
 
   sealed trait SequenceParser extends Parser
   final case class ~>(p: Parser /* Parser[_] */, q: Parser /* Parser[A] */) extends SequenceParser /* Parser[A] */
   final case class <~(p: Parser /* Parser[A] */, q: Parser /* Parser[_] */) extends SequenceParser /* Parser[A] */
 
   sealed trait ChainParser extends Parser
-  final case class Postfix(tpe: Type.Name, p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
+  final case class Postfix(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
+  final case class Left1(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[(A, A) => A] */) extends ChainParser /* Parser[A] */
 
   sealed trait IterativeParser extends Parser
   final case class ManyP(p: Parser /* Parser[A] */) extends IterativeParser /* Parser[List[A]] */

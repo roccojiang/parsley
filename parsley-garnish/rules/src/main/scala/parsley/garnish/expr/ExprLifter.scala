@@ -12,7 +12,7 @@ object ExprLifter {
   def lift(term: Term, numParams: Int)(implicit doc: SemanticDocument): Expr = term match {   
     case f: Term.Function          => buildFromFunctionTerm(f)
     case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)
-    case f: Term.Name =>
+    case f: Term.Name if numParams > 0 =>
       // TODO: infer types, but these are SemanticTypes and we need scala.meta.Type
       val inferredTypeSig = getInferredTypeSignature(f)
       val params = if (inferredTypeSig.nonEmpty) {

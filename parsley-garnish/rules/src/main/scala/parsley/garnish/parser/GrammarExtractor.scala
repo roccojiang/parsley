@@ -13,7 +13,7 @@ object GrammarExtractor {
     val definitionSite: Position = originalTree.parent.getOrElse(originalTree).pos
   }
 
-  def getParserDefinitions(includeDefDefinitions: Boolean = false)
+  def getParserDefinitions(includeDefDefinitions: Boolean = true)
                           (implicit doc: SemanticDocument): Seq[ParserDefinition] = {
     val varDefns = doc.tree.collect {
       // See https://scalameta.org/docs/semanticdb/specification.html#symbol for symbol uniqueness guarantees

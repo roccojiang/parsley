@@ -22,7 +22,7 @@ object FindNonTerminalsTest {
   val p: Parsley[String] = string("thyme") /* assert: InternalTestingRule
   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 p was detected to be a non-terminal, and parsed as:
-Str(thyme,false)
+Str(Translucent("thyme",Map(),false),false)
 */
 
   var q = string("rosemary") // assert: InternalTestingRule

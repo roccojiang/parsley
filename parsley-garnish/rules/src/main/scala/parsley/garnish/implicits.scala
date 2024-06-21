@@ -19,6 +19,6 @@ object implicits {
     import parsley.garnish.parser.{Parser, ParserLifter}
 
     def toParser(implicit doc: SemanticDocument): Parser = ParserLifter.lift(term)
-    def toExpr(numParams: Int = 1)(implicit doc: SemanticDocument): Expr = ExprLifter.lift(term, numParams)
+    def toExpr(numParams: Int = 0)(implicit doc: SemanticDocument): Expr = ExprLifter.lift(term, numParams)
   }
 }

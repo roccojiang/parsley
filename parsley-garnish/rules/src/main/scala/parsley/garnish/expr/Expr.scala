@@ -19,6 +19,14 @@ sealed abstract class Expr extends Product with Serializable {
     case _                => this
   }
 
+  def etaReduce: Expr = this match {
+    case AbsN(xs, AppN(f, ys)) =>
+      if (xs.length == ys.length && xs.zip(ys).forall { case (x, y) => x == y }) f
+      else this
+
+    case _ => this
+  }
+
   def normalise: Expr = this.evaluate.reify
 
   private def evaluate: Sem = {
