@@ -4,10 +4,9 @@ import scala.collection.mutable
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.parser.ParserLifter._
 import parsley.garnish.expr.Expr, Expr._
-import parsley.garnish.parser.Parser
-import Parser._
+import parsley.garnish.parser.GrammarExtractor._
+import parsley.garnish.parser.Parser, Parser._
 
 object Transformation {
   def removeLeftRecursion()(implicit doc: SemanticDocument): Patch = {

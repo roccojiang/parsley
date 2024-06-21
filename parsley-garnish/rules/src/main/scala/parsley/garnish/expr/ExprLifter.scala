@@ -8,6 +8,7 @@ import parsley.garnish.expr.Expr, Expr._
 import parsley.garnish.expr.TypeSignatureAnalyzer.getInferredTypeSignature
 
 object ExprLifter {
+
   def lift(term: Term, numParams: Int)(implicit doc: SemanticDocument): Expr = term match {   
     case f: Term.Function          => buildFromFunctionTerm(f)
     case f: Term.AnonymousFunction => buildFromAnonFunctionTerm(f)

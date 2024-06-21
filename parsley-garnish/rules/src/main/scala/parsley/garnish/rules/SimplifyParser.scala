@@ -1,9 +1,8 @@
 package parsley.garnish.rules
 
-import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.parser.ParserLifter.{getParserDefinitions, ParserDefinition}
+import parsley.garnish.parser.GrammarExtractor.{getParserDefinitions, ParserDefinition}
 
 class SimplifyParser extends SemanticRule("SimplifyParser") {
   override def fix(implicit doc: SemanticDocument): Patch = {

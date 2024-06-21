@@ -3,17 +3,9 @@ package parsley.garnish.rules.leftrec
 import scala.meta._
 import scalafix.lint.LintSeverity
 import scalafix.v1.Diagnostic
-import parsley.garnish.parser.ParserLifter.ParserDefinition
-import parsley.garnish.parser.Parser
 
-case class DebugNonTerminalLint(parserDefn: ParserDefinition) extends Diagnostic {
-  override def position: Position = parserDefn.definitionSite
-  override def severity: LintSeverity = LintSeverity.Info
-  override def message: String =
-    s"""${parserDefn.name.syntax} was detected to be a non-terminal, and parsed as:
-       |${parserDefn.parser}
-     """.stripMargin
-}
+import parsley.garnish.parser.GrammarExtractor.ParserDefinition
+import parsley.garnish.parser.Parser
 
 case class LeftRecDerivesEmptyLint(parserDefn: ParserDefinition, transformed: Parser) extends Diagnostic {
   override def position: Position = parserDefn.definitionSite

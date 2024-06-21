@@ -3,9 +3,8 @@ package parsley.garnish.rules
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.parser.Parser._
-import parsley.garnish.parser.ParserLifter.{getParserDefinitions, ParserDefinition}
-import parsley.garnish.parser.Parser
+import parsley.garnish.parser.GrammarExtractor.{getParserDefinitions, ParserDefinition}
+import parsley.garnish.parser.Parser, Parser._
 
 class AvoidParserRedefinition extends SemanticRule("AvoidParserRedefinition") {
   override def fix(implicit doc: SemanticDocument): Patch = {

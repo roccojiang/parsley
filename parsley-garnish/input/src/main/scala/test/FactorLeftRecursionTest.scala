@@ -1,7 +1,7 @@
 /* 
 rule = FactorLeftRecursion
  */
-package test.leftrec
+package test
 
 import parsley.quick._
 import parsley.syntax.character._
