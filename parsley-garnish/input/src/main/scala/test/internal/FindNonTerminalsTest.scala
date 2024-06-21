@@ -1,6 +1,6 @@
 /*
-rule = FactorLeftRecursion
-FactorLeftRecursion.debugOptions = [reportNonTerminalLocations]
+rule = InternalTestingRule
+InternalTestingRule.debugOptions = [reportNonTerminalLocations]
  */
 package test.leftrec
 
@@ -9,28 +9,27 @@ import parsley.Parsley.empty
 import parsley.character.string
 import parsley.expr.chain
 
-// TODO: refactor this to be decoupled from FactorLeftRecursion rule
 /**
   * Unit tests for the detection of non-terminals in order to perform auto-factoring of left recursion.
   * 
-  * Each `// assert: FactorLeftRecursion` comment asserts that the corresponding parser should be detected as a non-terminal.
+  * Each `// assert: InternalTestingRule` comment asserts that the corresponding parser should be detected as a non-terminal.
   */
 object FindNonTerminalsTest {
   // sbt garnishTests/testOnly *RuleSuite -- -z FindNonTerminalsTest
 
   val notAParser = List(1) ++ List(2)
 
-  val p: Parsley[String] = string("thyme") /* assert: FactorLeftRecursion
+  val p: Parsley[String] = string("thyme") /* assert: InternalTestingRule
   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 p was detected to be a non-terminal, and parsed as:
 Str(thyme,false)
 */
 
-  var q = string("rosemary") // assert: FactorLeftRecursion
-  lazy val r: Parsley[Unit] = empty.void // assert: FactorLeftRecursion
+  var q = string("rosemary") // assert: InternalTestingRule
+  lazy val r: Parsley[Unit] = empty.void // assert: InternalTestingRule
 
   def add(a: String)(b: String) = a + b
-  val s = p.map(add) <*> string("sage") // assert: FactorLeftRecursion
+  val s = p.map(add) <*> string("sage") // assert: InternalTestingRule
 
   def t[A](p: Parsley[A]): Parsley[(A, String)] = p <~> q // TODO: I don't believe this should be detected as a non-terminal?
 
@@ -41,13 +40,13 @@ Str(thyme,false)
   */
 
   object NestedScope {
-    val p = r <~> s // assert: FactorLeftRecursion
+    val p = r <~> s // assert: InternalTestingRule
   }
 
   def main(args: Array[String]): Unit = {
     // sbt garnishInput/run
 
-    val p = t(s) // assert: FactorLeftRecursion
+    val p = t(s) // assert: InternalTestingRule
     println(p.parse("thymesagerosemary"))
   }
 }

@@ -3,12 +3,12 @@ package parsley.garnish.rules
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.model.Parser, Parser._
-import parsley.garnish.analysis.ParserTransformer.{getAllParserDefns, ParserDefinition}
+import parsley.garnish.parser.GrammarExtractor.{getParserDefinitions, ParserDefinition}
+import parsley.garnish.parser.Parser, Parser._
 
 class AvoidParserRedefinition extends SemanticRule("AvoidParserRedefinition") {
   override def fix(implicit doc: SemanticDocument): Patch = {
-    getAllParserDefns.map { case ParserDefinition(_, parser, _, originalTree) =>
+    getParserDefinitions(includeDefDefinitions = true).map { case ParserDefinition(_, parser, _, originalTree) =>
       val updatedParser = parser.rewrite(redefinitions)
       if (!parser.isEquivalent(updatedParser)) {
         val updatedParserTerm = updatedParser.term.syntax

@@ -1,7 +1,11 @@
-package parsley.garnish.model
+package parsley.garnish.expr
 
 import scala.meta._
 
+/**
+  * The root type of the intermediate Expr AST.
+  * Modelled as a named representation of the n-ary lambda calculus.
+  */
 sealed abstract class Expr extends Product with Serializable {
   import Expr._
 
@@ -36,6 +40,7 @@ sealed abstract class Expr extends Product with Serializable {
 }
 
 object Expr {
+
   type VarName = String
 
   final case class Translucent(originalTerm: Term, env: Map[VarName, Expr] = Map.empty, isCurried: Boolean = false) extends Expr {
@@ -138,6 +143,9 @@ object Expr {
   def cons(x: Expr, xs: Expr): Expr = App(cons, x, xs)
 }
 
+/**
+  * HOAS-based intensional semantics for normalisation by evaluation (NbE) of the Expr AST.
+  */
 private sealed abstract class Sem extends Product with Serializable {
   import parsley.garnish.utils.Fresh
   import Sem._

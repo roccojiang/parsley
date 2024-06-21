@@ -1,4 +1,4 @@
-package parsley.garnish.analysis
+package parsley.garnish.expr
 
 import scala.meta._
 import scalafix.v1._

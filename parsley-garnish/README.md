@@ -11,8 +11,8 @@ Scalafix lint diagnostics and auto-fix rules for `parsley`.
 
 ### Package structure
 * `parsley.garnish.rules` contains the rules themselves
-* `parsley.garnish.model` holds the `Parser` and `Expr` intermediate AST implementations
-* `parsley.garnish.analysis` includes various utilities for analysing the Scalameta AST to lift sections to `Parser` and/or `Expr`
+* `parsley.garnish.parser` holds the `Parser` intermediate AST implementation
+* `parsley.garnish.expr` holds the `Expr` intermediate AST implementation
 * `parsley.garnish.util` consists of general utilities
 
 ### Useful commands

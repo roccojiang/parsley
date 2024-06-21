@@ -1,8 +1,8 @@
-package parsley.garnish.analysis
+package parsley.garnish.expr
 
 import scala.meta._
 
-import TypeSignatureAnalyzer.{ConcreteType, TypeSignature}
+import parsley.garnish.expr.TypeSignatureAnalyzer.{ConcreteType, TypeSignature}
 
 object MethodParametersAnalyzer {
 
@@ -12,13 +12,13 @@ object MethodParametersAnalyzer {
 
   case class ConcreteArg(arg: Term, tpe: Option[ConcreteType] = None) extends FuncArgument
 
-  private[analysis] def extractParamLists(f: Term): List[List[Term.Name]] = f match {
+  private[expr] def extractParamLists(f: Term): List[List[Term.Name]] = f match {
     case Term.Function.After_4_6_0(params, body) =>
       params.values.collect { case Term.Param(_, name: Term.Name, _, _) => name } :: extractParamLists(body)
     case _ => List.empty
   }
 
-  private[analysis] def extractArgs(t: Term): List[List[Term]] = {
+  private[expr] def extractArgs(t: Term): List[List[Term]] = {
     def recurse(t: Term): List[List[Term]] = t match {
       case Term.Apply.After_4_6_0(fun, args) => args.values :: recurse(fun)
       case _ => List.empty

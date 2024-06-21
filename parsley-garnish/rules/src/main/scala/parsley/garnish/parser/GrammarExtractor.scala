@@ -1,33 +1,37 @@
-package parsley.garnish.analysis
+package parsley.garnish.parser
 
 import scala.meta._
 import scalafix.v1._
 
-import parsley.garnish.model.Parser
-import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 import parsley.garnish.implicits.TermOps
+import parsley.garnish.utils.TypeUtils.{getParsleyType, isParsleyType}
 
-object ParserTransformer {
+object GrammarExtractor {
+  type Grammar = Map[Symbol, ParserDefinition]
 
   final case class ParserDefinition(name: Term.Name, parser: Parser, tpe: Type.Name, originalTree: Term) {
     val definitionSite: Position = originalTree.parent.getOrElse(originalTree).pos
   }
 
-  def getNonTerminalParserDefns(implicit doc: SemanticDocument): Seq[ParserDefinition] =
-    doc.tree.collect {
+  def getParserDefinitions(includeDefDefinitions: Boolean = false)
+                          (implicit doc: SemanticDocument): Seq[ParserDefinition] = {
+    val varDefns = doc.tree.collect {
       // See https://scalameta.org/docs/semanticdb/specification.html#symbol for symbol uniqueness guarantees
       // since we only deal with one document at a time, it should be fine to look at both global and local symbols
       case VariableDecl(vars, body) => collectVars(vars, body)
     }.flatten
 
-  def getAllParserDefns(implicit doc: SemanticDocument): Seq[ParserDefinition] =
-    doc.tree.collect {
-      case VariableDecl(vars, body) => collectVars(vars, body)
-      // this case lives here at the moment, I don't think it counts as a non-terminal
+    val defDefns = doc.tree.collect {
       case defDefn @ Defn.Def.After_4_7_3(_, name, _, _, body) if isParsleyType(defDefn.symbol) =>
         // TODO: do we need to do something special to deal with the function arguments?
         Seq(buildParserDefinition(defDefn.symbol, name, body))
     }.flatten
+
+    varDefns ++ (if (includeDefDefinitions) defDefns else Seq.empty)
+  }
+
+  def getGrammarMap(includeDefDefinitions: Boolean = false)(implicit doc: SemanticDocument): Grammar =
+    getParserDefinitions(includeDefDefinitions).map(parserDefn => parserDefn.name.symbol -> parserDefn).toMap
 
   private object VariableDecl {
     def unapply(tree: Tree): Option[(List[Pat], Term)] = tree match {
