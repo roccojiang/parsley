@@ -49,7 +49,7 @@ object Transformation {
     case p: IterativeParser => unfoldIter(p)
     case p: SeparatedValuesParser => unfoldSepVal(p)
 
-    case p: Unknown => UnfoldedParser(None, p, Empty)
+    case p: UnknownParser => UnfoldedParser(None, p, Empty)
   }
 
   private def unfoldCore(p: CoreParser)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = p match {

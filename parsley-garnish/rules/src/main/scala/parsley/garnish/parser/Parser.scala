@@ -106,6 +106,10 @@ sealed abstract class Parser extends Product with Serializable {
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
+
+      case UnknownApply(op, args) => UnknownApply(op, args.map(_.transform(pf)))
+      case UnknownSelect(op, p, args) => UnknownSelect(op, p.transform(pf), args.map(_.transform(pf)))
+      case UnknownInfix(op, lhs, rhs) => UnknownInfix(op, lhs.transform(pf), rhs.transform(pf))
       case unk: Unknown => unk
     }
 
@@ -163,7 +167,11 @@ object Parser {
   sealed trait SeparatedValuesParser extends Parser
   final case class EndBy(p: Parser /* Parser[A] */, sep: Parser /* Parser[_] */) extends SeparatedValuesParser /* Parser[List[A]] */
 
-  final case class Unknown(unrecognisedTerm: Term) extends Parser
+  sealed trait UnknownParser extends Parser
+  final case class UnknownApply(unrecognisedOp: Term.Name, args: List[Parser]) extends UnknownParser
+  final case class UnknownSelect(unrecognisedOp: Term.Name, p: Parser, args: List[Parser]) extends UnknownParser
+  final case class UnknownInfix(unrecognisedOp: Term.Name, lhs: Parser, rhs: Parser) extends UnknownParser
+  final case class Unknown(unrecognisedTerm: Term) extends UnknownParser
 
   /* Extension methods for parsers */
   implicit class ParserOps(private val p: Parser) extends AnyVal {

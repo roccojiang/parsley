@@ -85,6 +85,13 @@ object ParserLifter {
       NonTerminal(t.symbol, t.symbol.info.get.displayName)
 
     /* Otherwise, unknown parser */
-    case unrecognised => Unknown(unrecognised)
+    case Term.Apply.After_4_6_0(unrecognisedOp: Term.Name, Term.ArgClause(args, _)) =>
+      UnknownApply(unrecognisedOp, args.map(_.toParser))
+    case Term.Apply.After_4_6_0(Term.Select(p, unrecognisedOp), Term.ArgClause((args, _))) =>
+      UnknownSelect(unrecognisedOp, p.toParser, args.map(_.toParser))
+    case Term.ApplyInfix.After_4_6_0(lhs, unrecognisedOp, _, Term.ArgClause(List(rhs), _)) =>
+      UnknownInfix(unrecognisedOp, lhs.toParser, rhs.toParser)
+    case unrecognised =>
+      Unknown(unrecognised)
   }
 }

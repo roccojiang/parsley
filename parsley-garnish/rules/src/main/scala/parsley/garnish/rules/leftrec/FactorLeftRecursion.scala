@@ -9,8 +9,9 @@ import parsley.garnish.rules.leftrec.Transformation._
 
 class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
   override def fix(implicit doc: SemanticDocument): Patch = {
+    // println(getGrammarMap(false))
     val nonTerminals = getParserDefinitions(includeDefDefinitions = false).map(_.name.symbol)
-    val grammarMap = getGrammarMap().map { 
+    val grammarMap = getGrammarMap(includeDefDefinitions = false).map { 
       case (sym, parserDefn) => sym -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
@@ -20,7 +21,7 @@ class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
       val unfolded = unfoldProduction(grammarMap.view.mapValues(_._2).toMap, sym)
       val (orig, parserDefn) = grammarMap(sym)
       transform(unfolded, parserDefn) match {
-        case Left(patch) => patch.atomic
+        case Left(patch) => patch // TODO: making this .atomic breaks lints, for some reason
         case Right(transformedParser) =>
           grammarMap(sym) = (orig, parserDefn.copy(parser = transformedParser))
           Patch.empty

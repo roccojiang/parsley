@@ -30,7 +30,7 @@ object GrammarExtractor {
     varDefns ++ (if (includeDefDefinitions) defDefns else Seq.empty)
   }
 
-  def getGrammarMap(includeDefDefinitions: Boolean = false)(implicit doc: SemanticDocument): Grammar =
+  def getGrammarMap(includeDefDefinitions: Boolean = true)(implicit doc: SemanticDocument): Grammar =
     getParserDefinitions(includeDefDefinitions).map(parserDefn => parserDefn.name.symbol -> parserDefn).toMap
 
   private object VariableDecl {

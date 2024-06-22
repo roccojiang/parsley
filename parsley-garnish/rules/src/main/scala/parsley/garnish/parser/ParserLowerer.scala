@@ -15,7 +15,7 @@ private[parser] object ParserLowerer {
     case p: IterativeParser => lowerIter(p)
     case p: SeparatedValuesParser => lowerSepVal(p)
 
-    case Unknown(term) => term
+    case p: UnknownParser => lowerUnknown(p)
   }
 
   private def lowerCore(p: CoreParser) = p match {
@@ -67,5 +67,12 @@ private[parser] object ParserLowerer {
 
   private def lowerSepVal(p: SeparatedValuesParser) = p match {
     case EndBy(p, sep) => q"endBy(${p.term}, ${sep.term})"
+  }
+
+  private def lowerUnknown(p: UnknownParser) = p match {
+    case UnknownApply(op, args) => q"$op(..${args.map(_.term)})"
+    case UnknownSelect(op, p, args) => q"${p.term}.$op(..${args.map(_.term)})"
+    case UnknownInfix(op, lhs, rhs) => q"${lhs.term} $op ${rhs.term}"
+    case Unknown(unrecognisedTerm) => unrecognisedTerm
   }
 }
