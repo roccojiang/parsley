@@ -5,21 +5,13 @@ import parsley.quick._
 import parsley.syntax.zipped._
 
 import demo.lexer.{ident, nat}
+import demo._
 import parsley.expr.chain
 import parsley.syntax.character._
 
-// Use implicit conversions:
+// Use charLift/stringLift implicit conversions:
 // demo/scalafix UseImplicitConversions -f parsley-garnish-demo/src/main/scala/demo/backup/parser2.scala
 object parser2a {
-  case class Prog(decls: List[Asgn], x: Expr)
-  case class Asgn(v: String, x: Expr)
-
-  sealed trait Expr
-  case class Add(x: Expr, y: Expr) extends Expr
-  case class Mul(x: Expr, y: Expr) extends Expr
-  case class Val(x: BigInt) extends Expr
-  case class Var(v: String) extends Expr
-
   private lazy val parser: Parsley[Prog] = prog
 
   // <prog> ::= <asgns> <expr>

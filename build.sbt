@@ -132,7 +132,7 @@ lazy val demo = project
   .in(file("parsley-garnish-demo"))
   .dependsOn(parsley.jvm)
   .dependsOn(garnishRules % ScalafixConfig)
-  .settings(parsleyGarnishSettings)
+  .settings(parsleyGarnishTestSettings)
 
 lazy val parsleyGarnishSettings = commonSettings ++ Seq(
   semanticdbEnabled := true,

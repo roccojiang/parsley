@@ -12,6 +12,7 @@ object lexer {
     ),
     spaceDesc = SpaceDesc.plain,
     symbolDesc = SymbolDesc.plain.copy(
+      hardKeywords = Set("let"),
       hardOperators = Set("+", "*"),
     ),
   )

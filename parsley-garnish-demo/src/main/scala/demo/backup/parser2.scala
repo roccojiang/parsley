@@ -5,19 +5,11 @@ import parsley.quick._
 import parsley.syntax.zipped._
 
 import demo.lexer.{ident, nat}
+import demo._
 import parsley.expr.chain
 
 // Finish the other parsers
 object parser2 {
-  case class Prog(decls: List[Asgn], x: Expr)
-  case class Asgn(v: String, x: Expr)
-
-  sealed trait Expr
-  case class Add(x: Expr, y: Expr) extends Expr
-  case class Mul(x: Expr, y: Expr) extends Expr
-  case class Val(x: BigInt) extends Expr
-  case class Var(v: String) extends Expr
-
   private lazy val parser: Parsley[Prog] = prog
 
   // <prog> ::= <asgns> <expr>

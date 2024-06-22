@@ -12,6 +12,8 @@ import parsley.garnish.expr.Expr, Expr._
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
 
+  var tpe: Option[Type.Name] = None
+
   def term: Term = ParserLowerer.lower(this)
 
   def isEquivalent(other: Parser): Boolean = this.normalise == other.normalise
@@ -157,8 +159,8 @@ object Parser {
   final case class <~(p: Parser /* Parser[A] */, q: Parser /* Parser[_] */) extends SequenceParser /* Parser[A] */
 
   sealed trait ChainParser extends Parser
-  final case class Postfix(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
-  final case class Left1(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[(A, A) => A] */) extends ChainParser /* Parser[A] */
+  final case class Postfix(displayTpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
+  final case class Left1(displayTpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[(A, A) => A] */) extends ChainParser /* Parser[A] */
 
   sealed trait IterativeParser extends Parser
   final case class ManyP(p: Parser /* Parser[A] */) extends IterativeParser /* Parser[List[A]] */

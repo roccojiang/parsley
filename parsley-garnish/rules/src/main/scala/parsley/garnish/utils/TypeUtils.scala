@@ -1,7 +1,7 @@
 package parsley.garnish.utils
 
 import scala.PartialFunction.cond
-import scala.meta.Type
+import scala.meta.{Term, Type}
 import scalafix.v1._
 
 object TypeUtils {
@@ -13,6 +13,8 @@ object TypeUtils {
       case TypeRef(_, parsleyMatcher(_), List(t)) => Type.Name(t.toString)
     }
   }
+
+  def getParsleyType(term: Term)(implicit doc: SemanticDocument): Option[Type.Name] = getParsleyType(term.symbol)
 
   def isParsleyType(s: Symbol)(implicit doc: SemanticDocument): Boolean = cond(s.info) {
     case Some(info) => cond(getSemanticType(info.signature)) {
