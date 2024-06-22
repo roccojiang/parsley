@@ -69,7 +69,7 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   def normaliseExprs: Parser = transformExprs(_.normalise)
-  def etaReduceExprs: Parser = transformExprs(_.etaReduce)
+  def etaReduceExprs: Parser = transformExprs(_.normalise.etaReduce)
 
   def transformExprs(f: Expr => Expr): Parser = this.transform {
     case Pure(x) => Pure(f(x))

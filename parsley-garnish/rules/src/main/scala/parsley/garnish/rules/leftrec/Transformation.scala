@@ -61,10 +61,11 @@ object Transformation {
   }
 
   private def unfoldNT(nt: NonTerminal)(implicit ctx: UnfoldingContext, doc: SemanticDocument) = {
-    assert(ctx.env.contains(nt.ref),
-      s"expected to find non-terminal ${nt.ref} in this file, instead found: ${ctx.env.keys}")
+    // assert(ctx.env.contains(nt.ref),
+    //   s"expected to find non-terminal ${nt.ref} in this file, instead found: ${ctx.env.keys}")
+    if (!ctx.env.contains(nt.ref)) UnfoldedParser(None, nt, Empty)
 
-    if (nt.ref == ctx.nonTerminal) {
+    else if (nt.ref == ctx.nonTerminal) {
       UnfoldedParser(None, Empty, Pure(id))
     } else if (ctx.visited.contains(nt.ref)) {
       UnfoldedParser(None, nt, Empty)

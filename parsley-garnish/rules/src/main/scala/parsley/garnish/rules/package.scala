@@ -12,7 +12,7 @@ package object rules {
       val updatedParser = rewriteFunc(parser)
       if (!parser.isEquivalent(updatedParser)) {
         val updatedParserTerm = updatedParser.term.syntax
-        Patch.replaceTree(originalTree, updatedParserTerm)
+        Patch.replaceTree(originalTree, updatedParserTerm).atomic
       } else {
         Patch.empty
       }
