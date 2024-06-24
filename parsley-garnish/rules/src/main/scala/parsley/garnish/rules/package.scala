@@ -7,14 +7,11 @@ import parsley.garnish.parser.GrammarExtractor.{getParserDefinitions, ParserDefi
 import parsley.garnish.parser.Parser
 
 package object rules {
-
-  def rewriteAllParsers(rewriteFunc: Parser => Parser, sideEffects: Tree => Patch = Function.const(Patch.empty))
-                       (implicit doc: SemanticDocument): Patch =
+  def rewriteAllParsers(rewriteFunc: Parser => Parser)(implicit doc: SemanticDocument): Patch =
     getParserDefinitions().map { case ParserDefinition(_, parser, _, originalTree) =>
       val updatedParser = rewriteFunc(parser)
       if (!parser.isEquivalent(updatedParser)) {
         val updatedParserTerm = updatedParser.term.syntax
-        sideEffects(originalTree).atomic
         Patch.replaceTree(originalTree, updatedParserTerm).atomic
       } else {
         Patch.empty

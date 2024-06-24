@@ -7,7 +7,6 @@ import parsley.syntax.zipped._
 import demo.lexer.{ident, nat}
 import demo._
 
-// scalafix:off
 object parser1 {
   private lazy val parser: Parsley[Prog] = prog
 
@@ -19,9 +18,13 @@ object parser1 {
   private lazy val asgn: Parsley[Asgn] = ???
 
   // <expr> ::= <expr> '+' <term> | <term>
-  private lazy val expr: Parsley[Expr] = (expr, char('+') ~> term).zipped(Add) | term
+  private lazy val expr: Parsley[Expr] = (expr, char('+') ~> term).zipped(Add) |
+                                         (expr, char('-') ~> term).zipped(Sub) |
+                                         term
   // <term> ::= <term> '*' <atom> | <atom>
-  private lazy val term: Parsley[Expr] = (term, char('*') ~> atom).zipped(Mul) | atom
+  private lazy val term: Parsley[Expr] = (term, char('*') ~> atom).zipped(Mul) |
+                                         (term, char('/') ~> atom).zipped(Div) |
+                                         atom
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   private lazy val atom = nat.map(Val) | ident.map(Var) | char('(') ~> expr <~ char(')')
 

@@ -21,9 +21,9 @@ object parser1a {
   private lazy val asgn: Parsley[Asgn] = ???
 
   // <expr> ::= <expr> '+' <term> | <term>
-  private lazy val expr: Parsley[Expr] = chain.postfix[Expr](term)((char('+') ~> term).map(x1 => x2 => Add(x2, x1)))
+  private lazy val expr: Parsley[Expr] = chain.postfix[Expr](term)((char('+') ~> term).map(x1 => x2 => Add(x2, x1)) | (char('-') ~> term).map(x1 => x2 => Sub(x2, x1)))
   // <term> ::= <term> '*' <atom> | <atom>
-  private lazy val term: Parsley[Expr] = chain.postfix[Expr](atom)((char('*') ~> atom).map(x1 => x2 => Mul(x2, x1)))
+  private lazy val term: Parsley[Expr] = chain.postfix[Expr](atom)((char('*') ~> atom).map(x1 => x2 => Mul(x2, x1)) | (char('/') ~> atom).map(x1 => x2 => Div(x2, x1)))
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   private lazy val atom = nat.map(Val) | ident.map(Var) | char('(') ~> expr <~ char(')')
 
