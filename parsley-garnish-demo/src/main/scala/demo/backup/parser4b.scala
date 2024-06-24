@@ -5,11 +5,12 @@ import parsley.quick._
 import parsley.syntax.zipped._
 import parsley.expr.chain
 
-import demo._
+import demo.parser._
 import demo.lexer.{fully, ident, nat}
 import demo.lexer.implicits.implicitSymbol
 import parsley.generic._
 
+// scalafix:off
 // Use generic bridges
 // demo/scalafix UseGenericBridges -f parsley-garnish-demo/src/main/scala/demo/backup/parser4a.scala
 object parser4b {
@@ -18,7 +19,9 @@ object parser4b {
 
   sealed trait Expr
   case class Add(x: Expr, y: Expr) extends Expr
+  case class Sub(x: Expr, y: Expr) extends Expr
   case class Mul(x: Expr, y: Expr) extends Expr
+  case class Div(x: Expr, y: Expr) extends Expr
   case class Val(x: BigInt) extends Expr
   case class Var(v: String) extends Expr
 
@@ -33,10 +36,10 @@ object parser4b {
   object Asgn extends ParserBridge2[String, Expr, Asgn]
   private lazy val asgn: Parsley[Asgn] = Asgn("let" ~> ident, "=" ~> expr)
 
-  // <expr> ::= <expr> '+' <term> | <term>
-  private lazy val expr: Parsley[Expr] = chain.postfix(term)(("+" ~> term).map(x1 => x2 => Add(x2, x1)))
-  // <term> ::= <term> '*' <atom> | <atom>
-  private lazy val term: Parsley[Expr] = chain.postfix(atom)(("*" ~> atom).map(x1 => x2 => Mul(x2, x1)))
+  // <expr> ::= <expr> '+' <term> | <expr> '-' <term> | <term>
+  private lazy val expr: Parsley[Expr] = chain.postfix(term)(("+" ~> term).map(x1 => x2 => Add(x2, x1)) | ("-" ~> term).map(x1 => x2 => Sub(x2, x1)))
+  // <term> ::= <term> '*' <atom> | <term> '/' <atom> | <atom>
+  private lazy val term: Parsley[Expr] = chain.postfix(atom)(("*" ~> atom).map(x1 => x2 => Mul(x2, x1)) | ("/" ~> atom).map(x1 => x2 => Div(x2, x1)))
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   object Val extends ParserBridge1[BigInt, Val]
   object Var extends ParserBridge1[String, Var]
