@@ -9,6 +9,60 @@ import demo.parser._
 class ParserTest extends AnyFlatSpec {
   def parse[Err: ErrorBuilder](input: String): Either[Err, Prog] = parser.parse(input).toEither
 
+  "expr" should "parse additions in a left-associative way" in {
+    parse("x+5+z") shouldBe Right(
+      Prog(Nil, Add(Add(Var("x"), Val(5)), Var("z")))
+    )
+  }
+
+  it should "parse right-associatively in the presence of parentheses" in {
+    parse("x+(5+z)") shouldBe Right(
+      Prog(Nil, Add(Var("x"), Add(Val(5), Var("z"))))
+    )
+  }
+
+  it should "work in assignments" in {
+    parse("let x = 5 + 6; x + 2") shouldBe Right(
+      Prog(List(Asgn("x", Add(Val(5), Val(6)))), Add(Var("x"), Val(2)))
+    )
+  }
+
+  it should "not allow for missing terms" in {
+    parse("+5") shouldBe a[Left[_, _]]
+    parse("x+y+") shouldBe a[Left[_, _]]
+  }
+
+  it should "not interleave with parentheses" in {
+    parse("(4+)5") shouldBe a[Left[_, _]]
+  }
+
+  "term" should "parse multiplications in a left-associative way" in {
+    parse("x*5*z") shouldBe Right(
+      Prog(Nil, Mul(Mul(Var("x"), Val(5)), Var("z")))
+    )
+  }
+
+  it should "parse right-associatively in the presence of parentheses" in {
+    parse("x*(5*z)") shouldBe Right(
+      Prog(Nil, Mul(Var("x"), Mul(Val(5), Var("z"))))
+    )
+  }
+
+  it should "work in assignments" in {
+    parse("let x = 5 * 6; x * 2") shouldBe Right(
+      Prog(List(Asgn("x", Mul(Val(5), Val(6)))), Mul(Var("x"), Val(2)))
+    )
+  }
+
+  it should "not allow for missing terms" in {
+    parse("*5") shouldBe a[Left[_, _]]
+    parse("x*y*") shouldBe a[Left[_, _]]
+  }
+
+  it should "not interleave with parentheses" in {
+    parse("(4*)5") shouldBe a[Left[_, _]]
+  }
+
   "prog" should "be able to parse no assignments" in {
     parse("13") shouldBe Right(Prog(Nil, Val(13)))
     parse("x") shouldBe Right(Prog(Nil, Var("x")))
@@ -54,59 +108,5 @@ class ParserTest extends AnyFlatSpec {
     parse("(4 + y) * (5 + x)") shouldBe Right(
       Prog(Nil, Mul(Add(Val(4), Var("y")), Add(Val(5), Var("x"))))
     )
-  }
-
-  "expr" should "parse additions in a left-associative way" in {
-    parse("x + 5 + z") shouldBe Right(
-      Prog(Nil, Add(Add(Var("x"), Val(5)), Var("z")))
-    )
-  }
-
-  it should "parse right-associatively in the presence of parentheses" in {
-    parse("x + (5 + z)") shouldBe Right(
-      Prog(Nil, Add(Var("x"), Add(Val(5), Var("z"))))
-    )
-  }
-
-  it should "work in assignments" in {
-    parse("let x = 5 + 6; x + 2") shouldBe Right(
-      Prog(List(Asgn("x", Add(Val(5), Val(6)))), Add(Var("x"), Val(2)))
-    )
-  }
-
-  it should "not allow for missing terms" in {
-    parse("+ 5") shouldBe a[Left[_, _]]
-    parse("x + y +") shouldBe a[Left[_, _]]
-  }
-
-  it should "not interleave with parentheses" in {
-    parse("(4 +) 5") shouldBe a[Left[_, _]]
-  }
-
-  "term" should "parse multiplications in a left-associative way" in {
-    parse("x * 5 * z") shouldBe Right(
-      Prog(Nil, Mul(Mul(Var("x"), Val(5)), Var("z")))
-    )
-  }
-
-  it should "parse right-associatively in the presence of parentheses" in {
-    parse("x * (5 * z)") shouldBe Right(
-      Prog(Nil, Mul(Var("x"), Mul(Val(5), Var("z"))))
-    )
-  }
-
-  it should "work in assignments" in {
-    parse("let x = 5 * 6; x * 2") shouldBe Right(
-      Prog(List(Asgn("x", Mul(Val(5), Val(6)))), Mul(Var("x"), Val(2)))
-    )
-  }
-
-  it should "not allow for missing terms" in {
-    parse("* 5") shouldBe a[Left[_, _]]
-    parse("x * y *") shouldBe a[Left[_, _]]
-  }
-
-  it should "not interleave with parentheses" in {
-    parse("(4 *) 5") shouldBe a[Left[_, _]]
   }
 }
