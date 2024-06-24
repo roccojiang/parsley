@@ -38,4 +38,9 @@ object parser {
                                          atom
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   private lazy val atom = nat.map(Val) | ident.map(Var) | char('(') ~> expr <~ char(')')
+
+  def main(args: Array[String]): Unit = {
+    val parsed = parser.parse("1+2*3/4")
+    println(parsed)
+  }
 }

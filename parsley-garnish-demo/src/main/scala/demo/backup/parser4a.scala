@@ -29,7 +29,7 @@ object parser4a {
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   private lazy val atom = nat.map(Val) | ident.map(Var) | "(" ~> expr <~ ")"
 
-  def main(args: Array[String]): Unit = {
-    println(parser.parse("let x = 1; x + 2"))
-  }
+  // def main(args: Array[String]): Unit = {
+  //   println(parser.parse("let x = 1; x + 2"))
+  // }
 }

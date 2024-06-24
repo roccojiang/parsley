@@ -45,7 +45,7 @@ object parser4b {
   object Var extends ParserBridge1[String, Var]
   private lazy val atom = Val(nat) | Var(ident) | "(" ~> expr <~ ")"
 
-  def main(args: Array[String]): Unit = {
-    println(parser.parse("let x = 1; x + 2"))
-  }
+  // def main(args: Array[String]): Unit = {
+  //   println(parser.parse("let x = 1; x + 2"))
+  // }
 }

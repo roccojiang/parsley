@@ -27,7 +27,7 @@ object parser2 {
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
   private lazy val atom = nat.map(Val) | ident.map(Var) | char('(') ~> expr <~ char(')')
 
-  def main(args: Array[String]): Unit = {
-    println(parser.parse("letx=1;x+2"))
-  }
+  // def main(args: Array[String]): Unit = {
+  //   println(parser.parse("letx=1;x+2"))
+  // }
 }
