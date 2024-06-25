@@ -24,20 +24,20 @@ object parser {
   // <prog> ::= <asgns> <expr>
   private lazy val prog: Parsley[Prog] = (asgns, expr).zipped(Prog)
   // <asgns> ::= (<asgn> ';')*
-  private lazy val asgns: Parsley[List[Asgn]] = many(asgn <~ char(';'))
+  private lazy val asgns: Parsley[List[Asgn]] = many(asgn <~ string(";"))
   // <asgn> ::= "let" <ident> '=' <expr>
-  private lazy val asgn: Parsley[Asgn] = (string("let") ~> ident, char('=') ~> expr).zipped(Asgn)
+  private lazy val asgn: Parsley[Asgn] = (string("let") ~> ident, string("=") ~> expr).zipped(Asgn)
 
   // <expr> ::= <expr> '+' <term> | <expr> '-' <term> | <term>
-  private lazy val expr: Parsley[Expr] = (expr, char('+') ~> term).zipped(Add) |
-                                         (expr, char('-') ~> term).zipped(Sub) |
+  private lazy val expr: Parsley[Expr] = (expr, string("+") ~> term).zipped(Add) |
+                                         (expr, string("-") ~> term).zipped(Sub) |
                                          term
   // <term> ::= <term> '*' <atom> | <term> '/' <atom> | <atom>
-  private lazy val term: Parsley[Expr] = (term, char('*') ~> atom).zipped(Mul) |
-                                         (term, char('/') ~> atom).zipped(Div) |
+  private lazy val term: Parsley[Expr] = (term, string("*") ~> atom).zipped(Mul) |
+                                         (term, string("/") ~> atom).zipped(Div) |
                                          atom
   // <atom> ::= <nat> | <ident> | '(' <expr> ')'
-  private lazy val atom = nat.map(Val) | ident.map(Var) | char('(') ~> expr <~ char(')')
+  private lazy val atom = nat.map(Val) | ident.map(Var) | string("(") ~> expr <~ string(")")
 
   def main(args: Array[String]): Unit = {
     val parsed = parser.parse("1+2*3/4")
