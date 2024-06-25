@@ -4,7 +4,7 @@ import parsley.Parsley
 import parsley.quick._
 import parsley.syntax.zipped._
 
-import lexer.{ident, nat}
+import lexer.{ident, nat, fully}
 
 object parser {
   /* Expression language AST */
@@ -19,7 +19,7 @@ object parser {
   case class Val(x: BigInt) extends Expr
   case class Var(v: String) extends Expr
 
-  lazy val parser: Parsley[Prog] = prog
+  lazy val parser: Parsley[Prog] = fully(prog)
 
   // <prog> ::= <asgns> <expr>
   private lazy val prog: Parsley[Prog] = (asgns, expr).zipped(Prog)
