@@ -12,6 +12,9 @@ import parsley.garnish.expr.Expr, Expr._
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
 
+  // TODO: Ew
+  var tpe: Option[Type.Name] = None
+
   def term: Term = ParserLowerer.lower(this)
 
   def isEquivalent(other: Parser): Boolean = this.normalise == other.normalise
@@ -69,7 +72,7 @@ sealed abstract class Parser extends Product with Serializable {
   }
 
   def normaliseExprs: Parser = transformExprs(_.normalise)
-  def etaReduceExprs: Parser = transformExprs(_.etaReduce)
+  def etaReduceExprs: Parser = transformExprs(_.normalise.etaReduce)
 
   def transformExprs(f: Expr => Expr): Parser = this.transform {
     case Pure(x) => Pure(f(x))
@@ -106,6 +109,10 @@ sealed abstract class Parser extends Product with Serializable {
       case p: Pure => p
       case Empty => Empty
       case nt: NonTerminal => nt
+
+      case UnknownApply(op, args) => UnknownApply(op, args.map(_.transform(pf)))
+      case UnknownSelect(op, p, args) => UnknownSelect(op, p.transform(pf), args.map(_.transform(pf)))
+      case UnknownInfix(op, lhs, rhs) => UnknownInfix(op, lhs.transform(pf), rhs.transform(pf))
       case unk: Unknown => unk
     }
 
@@ -153,8 +160,8 @@ object Parser {
   final case class <~(p: Parser /* Parser[A] */, q: Parser /* Parser[_] */) extends SequenceParser /* Parser[A] */
 
   sealed trait ChainParser extends Parser
-  final case class Postfix(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
-  final case class Left1(tpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[(A, A) => A] */) extends ChainParser /* Parser[A] */
+  final case class Postfix(displayTpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[A => A] */) extends ChainParser /* Parser[A] */
+  final case class Left1(displayTpe: Option[Type.Name], p: Parser /* Parser[A] */, op: Parser /* Parser[(A, A) => A] */) extends ChainParser /* Parser[A] */
 
   sealed trait IterativeParser extends Parser
   final case class ManyP(p: Parser /* Parser[A] */) extends IterativeParser /* Parser[List[A]] */
@@ -163,7 +170,11 @@ object Parser {
   sealed trait SeparatedValuesParser extends Parser
   final case class EndBy(p: Parser /* Parser[A] */, sep: Parser /* Parser[_] */) extends SeparatedValuesParser /* Parser[List[A]] */
 
-  final case class Unknown(unrecognisedTerm: Term) extends Parser
+  sealed trait UnknownParser extends Parser
+  final case class UnknownApply(unrecognisedOp: Term.Name, args: List[Parser]) extends UnknownParser
+  final case class UnknownSelect(unrecognisedOp: Term.Name, p: Parser, args: List[Parser]) extends UnknownParser
+  final case class UnknownInfix(unrecognisedOp: Term.Name, lhs: Parser, rhs: Parser) extends UnknownParser
+  final case class Unknown(unrecognisedTerm: Term) extends UnknownParser
 
   /* Extension methods for parsers */
   implicit class ParserOps(private val p: Parser) extends AnyVal {

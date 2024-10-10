@@ -9,8 +9,9 @@ import parsley.garnish.rules.leftrec.Transformation._
 
 class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
   override def fix(implicit doc: SemanticDocument): Patch = {
+    // println(getGrammarMap(false))
     val nonTerminals = getParserDefinitions(includeDefDefinitions = false).map(_.name.symbol)
-    val grammarMap = getGrammarMap().map { 
+    val grammarMap = getGrammarMap(includeDefDefinitions = false).map { 
       case (sym, parserDefn) => sym -> (parserDefn.parser, parserDefn)
     }.to(mutable.Map)
 
@@ -20,7 +21,7 @@ class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
       val unfolded = unfoldProduction(grammarMap.view.mapValues(_._2).toMap, sym)
       val (orig, parserDefn) = grammarMap(sym)
       transform(unfolded, parserDefn) match {
-        case Left(patch) => patch
+        case Left(patch) => patch // TODO: making this .atomic breaks lints, for some reason
         case Right(transformedParser) =>
           grammarMap(sym) = (orig, parserDefn.copy(parser = transformedParser))
           Patch.empty
@@ -30,10 +31,12 @@ class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
     val rewrites = grammarMap.values.collect {
       case (original, ParserDefinition(_, transformed, _, originalTree)) if !original.isEquivalent(transformed) =>
         Patch.replaceTree(originalTree, transformed.term.syntax)
-    }.asPatch
+    }.asPatch + Patch.addGlobalImport(importer"parsley.expr.chain")
 
-    // TODO: make patches atomic?
     // TODO: more principled manner of determining which imports to add
-    lints + rewrites + Patch.addGlobalImport(importer"parsley.expr.chain")
+
+    // Lints can be individually atomic patches, as they are safe to report in isolation
+    // Rewrites are wrapped in a single atomic patch: left-recursion removal depends on *all* productions being factored
+    lints + rewrites.atomic
   }
 }

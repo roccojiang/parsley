@@ -77,10 +77,12 @@ class AmbiguousImplicitConversions extends SyntacticRule("AmbiguousImplicitConve
     override def position: Position = tree.pos
     override def severity: LintSeverity = LintSeverity.Warning
     override def message: String =
-      s"""This import may cause clashing implicit conversions:
+      s"""These imports may cause clashing implicit conversions:
          |* ${imports.map(printImport).mkString("\n* ")}
          |If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-         |To fix this, ensure that you only import a single implicit conversion.
+         |Ensure that there is only one of these imports in scope -
+         | it is likely that you want to keep your lexer's implicitSymbol import,
+         | and remove the imported implicit conversion(s) from parsley.syntax.character.
        """.stripMargin
     
     private def printImport(importStat: Import): String =
