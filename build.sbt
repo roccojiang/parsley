@@ -1,12 +1,12 @@
 import _root_.parsley.build.mima
 
 val projectName = "parsley"
-val Scala213 = "2.13.14"
-val Scala212 = "2.12.18"
-val Scala3 = "3.3.3"
-val Java8 = JavaSpec.temurin("8")
-val JavaLTS = JavaSpec.temurin("11")
-val JavaLatest = JavaSpec.temurin("17")
+val Scala213 = "2.13.16"
+val Scala212 = "2.12.20"
+val Scala3 = "3.3.6"
+val Java11 = JavaSpec.temurin("11")
+val Java17 = JavaSpec.temurin("17")
+val Java21 = JavaSpec.temurin("21")
 
 val mainBranch = "staging/5.0"
 
@@ -29,25 +29,25 @@ inThisBuild(List(
   tlCiReleaseBranches := Seq(mainBranch),
   tlCiScalafmtCheck := false,
   tlCiHeaderCheck := true,
-  githubWorkflowJavaVersions := Seq(Java8, JavaLTS, JavaLatest),
-  githubWorkflowAddedJobs += testCoverageJob(githubWorkflowGeneratedCacheSteps.value.toList),
+  githubWorkflowJavaVersions := Seq(Java11, Java17, Java21),
+  // FIXME: codeclimate has been changed
+  //githubWorkflowAddedJobs += testCoverageJob(githubWorkflowGeneratedCacheSteps.value.toList),
   githubWorkflowConcurrency := None, // this allows us to not fail the pipeline on double commit
   // Website Configuration
   tlSitePublishBranch := Some(mainBranch),
 ))
 
-lazy val root = tlCrossRootProject.aggregate(parsley, parsleyDebug, parsleyGarnish)
+lazy val root = tlCrossRootProject.aggregate(parsley, parsleyDebug, parsleyGarnish, unidocs)
 
 // These settings are shared between all projects.
 lazy val commonSettings = Seq(
   headerLicenseStyle := HeaderLicenseStyle.SpdxSyntax,
   headerEmptyLine := false,
 
-  resolvers ++= Opts.resolver.sonatypeOssReleases, // Will speed up MiMA during fast back-to-back releases
+  //resolvers ++= Opts.resolver.sonatypeOssReleases, // Will speed up MiMA during fast back-to-back releases
   libraryDependencies ++= Seq(
-    "org.scalatest" %%% "scalatest" % "3.2.17" % Test,
-    "org.scalacheck" %%% "scalacheck" % "1.17.0" % Test,
-    "org.scalatestplus" %%% "scalacheck-1-17" % "3.2.15.0" % Test,
+    "org.scalatest" %%% "scalatest" % "3.2.19" % Test,
+    "org.scalatestplus" %%% "scalacheck-1-18" % "3.2.19.0" % Test,
   ),
 
   Test / testOptions += Tests.Argument(TestFrameworks.ScalaTest, "-oI"),
@@ -105,16 +105,28 @@ lazy val parsleyDebug = crossProject(JSPlatform, JVMPlatform, NativePlatform)
       }
     },
 
+    // 4.6 bumped 0.5 native, so old versions are no longer findable
     tlVersionIntroduced := Map(
-      "2.13" -> "4.5.0",
-      "2.12" -> "4.5.0",
-      "3"    -> "4.5.0",
+      "2.13" -> "4.6.0",
+      "2.12" -> "4.6.0",
+      "3"    -> "4.6.0",
     ),
   )
 
+// this allows us to publish a unified doc for parsley and parsley-debug
+lazy val unidocs = project
+  .in(file("unidoc"))
+  .enablePlugins(TypelevelUnidocPlugin)
+  .settings(
+    name := "parsley-docs",
+    ScalaUnidoc / unidoc / unidocProjectFilter := inProjects(parsley.jvm, parsleyDebug.jvm),
+    Compile / doc / scalacOptions ++= Seq("-groups", "-doc-root-content", s"${baseDirectory.value.getParentFile.getPath}/parsley/rootdoc.md"),
+  )
+
+// This is used for the website
 lazy val docs = project
   .in(file("site"))
-  .dependsOn(parsley.jvm)
+  .dependsOn(parsley.jvm, parsleyDebug.jvm)
   .enablePlugins(ParsleySitePlugin)
   .settings(
     tlSiteApiModule := Some((parsley.jvm / projectID).value),
@@ -123,9 +135,12 @@ lazy val docs = project
         "com.github.j-mie6" %% "parsley" % VersionScheme.Always,
     ),
     libraryDependencies ++= Seq(
-        "org.typelevel" %% "cats-core" % "2.10.0",
-        "com.github.j-mie6" %% "parsley-cats" % "1.3.0"
+        "org.typelevel" %% "cats-core" % "2.13.0",
+        "com.github.j-mie6" %% "parsley-cats" % "1.5.0"
     ),
+    // TODO: enable this when we switch to 3.8
+    //Compile / scalacOptions += "-experimental",
+    Compile / scalacOptions --= Seq("-unchecked", "-deprecation", "-Wunused:imports", "-Wunused:locals"),
   )
 
 lazy val parsleyGarnishSettings = commonSettings ++ Seq(
@@ -172,6 +187,7 @@ lazy val garnishOutput = project
   .in(file("parsley-garnish/output"))
   .dependsOn(parsley.jvm)
   .settings(
+    Compile / sources := Seq.empty,
     publish / skip := true,
     parsleyGarnishTestSettings,
   )
@@ -202,17 +218,20 @@ def testCoverageJob(cacheSteps: List[WorkflowStep]) = WorkflowJob(
     cond = Some(s"github.ref == 'refs/heads/$mainBranch' || (github.event_name == 'pull_request' && github.base_ref == '$mainBranch')"),
     steps =
         WorkflowStep.Checkout ::
-        WorkflowStep.SetupJava(List(JavaLTS)) :::
+        WorkflowStep.SetupSbt ::
+        WorkflowStep.SetupJava(List(Java11)) :::
         cacheSteps ::: List(
             WorkflowStep.Sbt(name = Some("Generate coverage report"), commands = List("coverage", "parsley / test", "parsleyDebug / test", "coverageReport")),
             WorkflowStep.Use(
                 name = Some("Upload coverage to Code Climate"),
                 ref = UseRef.Public(owner = "paambaati", repo = "codeclimate-action", ref = "v3.2.0"),
                 env = Map("CC_TEST_REPORTER_ID" -> "c1f669dece75a1d69bf0dc45a682d64837badc112b8098271ccc0dca1bbc7a09"),
-                // FIXME: Surely, there's a better method for multiple report locations than a multiline string (or using \n as a separator).
-                params = Map("coverageLocations" ->
-                  """${{github.workspace}}/parsley/jvm/target/scala-2.13/coverage-report/cobertura.xml:cobertura
-                    |${{github.workspace}}/parsley-debug/jvm/target/scala-2.13/coverage-report/cobertura.xml:cobertura""".stripMargin),
+                params = Map("coverageLocations" -> Seq(
+                    coverageReport("parsley"),
+                    coverageReport("parsley-debug"),
+                ).mkString("\n")),
             )
         )
 )
+
+def coverageReport(project: String) = s"$${{github.workspace}}/$project/jvm/target/scala-2.13/coverage-report/cobertura.xml:cobertura"

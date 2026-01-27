@@ -31,7 +31,6 @@ object ParsleySitePlugin extends AutoPlugin {
         tlSiteKeepFiles := true,
         laikaExtensions ++= Seq(
             Extensions.backticksToCode,
-            //Extensions.noVersionedIndex, // FIXME: evil extension breaks version selection, dunno why yet
         ),
         laikaConfig :=  LaikaConfig.defaults.withConfigValue(
             LinkConfig.empty.addApiLinks(tlSiteApiUrl.value.map(url => ApiLinks(baseUri = url.toExternalForm)).toSeq: _*)
@@ -40,7 +39,7 @@ object ParsleySitePlugin extends AutoPlugin {
             )
             .withRawContent,  // enable usage of raw HTML,
         mdocVariables := {
-            mdocVariables.value ++ Map("STABLE_VERSION" -> "4.5.1"),
+            mdocVariables.value ++ Map("STABLE_VERSION" -> "4.6.0"),
         },
         tlSiteHelium := {
             val notBackport = true || !githubIsWorkflowBuild.value
@@ -91,7 +90,7 @@ object ParsleySitePlugin extends AutoPlugin {
                     case (git, api) => LinkGroup.create(git, api)
                 }.toSeq,
                 teasers = Seq(
-                    Teaser("Modern", "Parsley employs modern design developed over five years of research, supporting many parser combinator design pattterns out of the box."),
+                    Teaser("Modern", "Parsley employs modern design developed over five years of research, supporting many parser combinator design patterns out of the box."),
                     Teaser("Stack-Safe", "Parsley promises to not stack-overflow during the runtime of the parser, preventing vulnerabilities."),
                     Teaser("Great Errors", "Parsley has good out-of-the-box error messages, with a lot of support for improving the content of error messages and their formatting."),
                     Teaser("Easily Debuggable", "Parsley parsers are easy to debug thanks to special combinators and debuggers."),
@@ -122,7 +121,7 @@ object ParsleySitePlugin extends AutoPlugin {
                     Version(s"$v.x", path).withLabel(label).withFallbackLink(s"api-guide")
                 Versions
                   .forCurrentVersion(version(tlBaseVersion.value, Dev)())
-                  .withOlderVersions(version("4.4", EndOfLife)(), version("4.5", Stable)().setCanonical)
+                  .withOlderVersions(version("4.6", Stable)().setCanonical, version("4.5", Stable)(), version("4.4", EndOfLife)())
                   .withRenderUnversioned(notBackport)
             }
             .site.themeColors(
@@ -197,12 +196,13 @@ object redirects {
 
     private def redirects(latest: String) = {
         // TODO: this can be made less brittle, surely can be derived from the above configuration?
-        val versions = List("latest", "stable", "4.4.x", "4.4", "4.5.x", "4.5", /*"5.0.x",*/ "5.0")
+        val versions = List("latest", "stable", /*"4.4.x",*/ "4.4", /*"4.5.x",*/ "4.5", /*"4.6.x",*/ "4.6", /*"5.0.x",*/ "5.0")
         val versionMappings = List(
             "latest" -> latest,
-            "stable" -> "4.5",
-            "4.4.x" -> "4.4",
-            "4.5.x" -> "4.5",
+            "stable" -> "4.6",
+            //"4.4.x" -> "4.4",
+            //"4.5.x" -> "4.5",
+            //"4.6.x" -> "4.6",
             //"5.0.x" -> "5.0",
         )
 
@@ -337,20 +337,6 @@ object Extensions {
         case (fmt, Text(Ticked(tickless), opt)) => fmt.withoutIndentation(_.textElement("code", Text(tickless).withOptions(opt)))
         // page title
         case (isTitleText(fmt), TemplateString(Ticked(tickless), opt)) => fmt.text(tickless)
-    }
-
-    val noVersionedIndex: ExtensionBundle = new ExtensionBundle {
-        val description: String = "intercepts versioning paths for index.html"
-        override def extendPathTranslator = {
-            case context => createTranslator(context.baseTranslator)
-        }
-    }
-
-    private def createTranslator(delegate: PathTranslator): PathTranslator = new PathTranslator {
-        override def translate(input: Path): Path = if (input.name == "index.html") input else delegate.translate(input)
-        override def translate(input: RelativePath): RelativePath = if (input.name == "index.html") input else delegate.translate(input)
-        override def getAttributes(path: Path): Option[PathAttributes] = delegate.getAttributes(path)
-        override def forReferencePath(path: Path): PathTranslator = createTranslator(delegate.forReferencePath(path))
     }
 
     private object isTitleText {
