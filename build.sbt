@@ -187,6 +187,7 @@ lazy val garnishOutput = project
   .in(file("parsley-garnish/output"))
   .dependsOn(parsley.jvm)
   .settings(
+    Compile / sources := Seq.empty,
     publish / skip := true,
     parsleyGarnishTestSettings,
   )
