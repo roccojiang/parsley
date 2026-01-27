@@ -9,7 +9,6 @@ import parsley.garnish.rules.leftrec.Transformation._
 
 class FactorLeftRecursion extends SemanticRule("FactorLeftRecursion") {
   override def fix(implicit doc: SemanticDocument): Patch = {
-    // println(getGrammarMap(false))
     val nonTerminals = getParserDefinitions(includeDefDefinitions = false).map(_.name.symbol)
     val grammarMap = getGrammarMap(includeDefDefinitions = false).map { 
       case (sym, parserDefn) => sym -> (parserDefn.parser, parserDefn)
