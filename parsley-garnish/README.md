@@ -18,10 +18,10 @@ Based on thesis work in [`parsley-garnish`: A linter for the `parsley` parser co
 
 ## Development
 ### Directory structure
-* [`rules/`](rules/) contains rule implementations.
+* [`rules/`](rules/src/main/) contains rule implementations.
   * [`scalafix.v1.Rule`](rules/src/main/resources/META-INF/services/scalafix.v1.Rule) should be updated when adding a new rule, so that Scalafix knows to load it by name.
-* [`input/`](input/) and [`output/`](output/) contain integration tests using `scalafix-testkit`.
-* [`tests/`](tests/) contains unit tests using ScalaTest.
+* [`input/`](input/src/main/scala/test/) and [`output/`](output/src/main/scala/test/) contain integration tests using `scalafix-testkit`.
+* [`tests/`](tests/src/test/scala/parsley/garnish/) contains unit tests using ScalaTest.
 
 ### Package structure
 * [`parsley.garnish.rules`](rules/src/main/scala/parsley/garnish/rules/) contains the implemenation of the rules described [above](#rules).
