@@ -97,7 +97,7 @@ object ParserLifter {
         Unknown(unrecognised)
     }
 
-    parser.tpe = getParsleyType(term) // TODO: refactor, and full type inference in the future?
+    parser.tpe = getParsleyType(term) // TODO: refactor, and full type inference in the future? create a typed parser wrapper?
     parser
   }
 }

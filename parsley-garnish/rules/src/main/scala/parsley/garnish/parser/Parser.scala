@@ -12,6 +12,7 @@ import parsley.garnish.expr.Expr, Expr._
 sealed abstract class Parser extends Product with Serializable {
   import Parser._
 
+  // TODO: Ew
   var tpe: Option[Type.Name] = None
 
   def term: Term = ParserLowerer.lower(this)

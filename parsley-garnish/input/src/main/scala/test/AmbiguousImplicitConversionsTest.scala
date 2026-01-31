@@ -8,10 +8,12 @@ object AmbiguousImplicitConversionsTest {
     def anise(): Unit = {
       import parsley.syntax.character._, lexer.implicits._ /* assert: AmbiguousImplicitConversions
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This import may cause clashing implicit conversions:
+These imports may cause clashing implicit conversions:
 * import parsley.syntax.character._, lexer.implicits._ at line 9
 If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-To fix this, ensure that you only import a single implicit conversion.
+Ensure that there is only one of these imports in scope -
+ it is likely that you want to keep your lexer's implicitSymbol import,
+ and remove the imported implicit conversion(s) from parsley.syntax.character.
 */
 
       // val badParser = "anise" ~> "basil" // expected error: value ~> is not a member of String
@@ -27,11 +29,13 @@ To fix this, ensure that you only import a single implicit conversion.
 
     import parsley.syntax.character.stringLift /* assert: AmbiguousImplicitConversions
     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This import may cause clashing implicit conversions:
-* import lexer.implicits.implicitSymbol at line 23
-* import parsley.syntax.character.stringLift at line 28
+These imports may cause clashing implicit conversions:
+* import lexer.implicits.implicitSymbol at line 25
+* import parsley.syntax.character.stringLift at line 30
 If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-To fix this, ensure that you only import a single implicit conversion.
+Ensure that there is only one of these imports in scope -
+ it is likely that you want to keep your lexer's implicitSymbol import,
+ and remove the imported implicit conversion(s) from parsley.syntax.character.
 */
 
     // val badParser = "basil" <~ "dill" // expected error: value <~ is not a member of String
@@ -43,11 +47,13 @@ To fix this, ensure that you only import a single implicit conversion.
     {
       import lexer.implicits.implicitSymbol /* assert: AmbiguousImplicitConversions
       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-This import may cause clashing implicit conversions:
-* import parsley.syntax.character._ at line 41
-* import lexer.implicits.implicitSymbol at line 44
+These imports may cause clashing implicit conversions:
+* import parsley.syntax.character._ at line 45
+* import lexer.implicits.implicitSymbol at line 48
 If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-To fix this, ensure that you only import a single implicit conversion.
+Ensure that there is only one of these imports in scope -
+ it is likely that you want to keep your lexer's implicitSymbol import,
+ and remove the imported implicit conversion(s) from parsley.syntax.character.
 */  
     }
   }
@@ -70,11 +76,13 @@ To fix this, ensure that you only import a single implicit conversion.
   object Epazote {
     import lexer.implicits._ /* assert: AmbiguousImplicitConversions
     ^^^^^^^^^^^^^^^^^^^^^^^^
-This import may cause clashing implicit conversions:
-* import parsley.syntax.character.stringLift at line 68
-* import lexer.implicits._ at line 71
+These imports may cause clashing implicit conversions:
+* import parsley.syntax.character.stringLift at line 74
+* import lexer.implicits._ at line 77
 If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-To fix this, ensure that you only import a single implicit conversion.
+Ensure that there is only one of these imports in scope -
+ it is likely that you want to keep your lexer's implicitSymbol import,
+ and remove the imported implicit conversion(s) from parsley.syntax.character.
 */
 
     object Fennel {
@@ -88,12 +96,14 @@ To fix this, ensure that you only import a single implicit conversion.
     import parsley.syntax.character._
     import lexer.implicits._ /* assert: AmbiguousImplicitConversions
     ^^^^^^^^^^^^^^^^^^^^^^^^
-This import may cause clashing implicit conversions:
-* import parsley.syntax.character.stringLift at line 68
-* import parsley.syntax.character._ at line 88
-* import lexer.implicits._ at line 89
+These imports may cause clashing implicit conversions:
+* import parsley.syntax.character.stringLift at line 74
+* import parsley.syntax.character._ at line 96
+* import lexer.implicits._ at line 97
 If this is the case, you may encounter confusing errors like 'method is not a member of String'.
-To fix this, ensure that you only import a single implicit conversion.
+Ensure that there is only one of these imports in scope -
+ it is likely that you want to keep your lexer's implicitSymbol import,
+ and remove the imported implicit conversion(s) from parsley.syntax.character.
 */
   }
 }
