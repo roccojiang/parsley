@@ -43,7 +43,7 @@ object UseGenericBridgesTest {
   object parser {
     import lexer._, lexer.implicits.implicitSymbol
 
-    private lazy val parser: Parsley[Prog] = fully(prog)
+    lazy val parser: Parsley[Prog] = fully(prog)
 
     // <prog> ::= <asgns> <expr>
     object Prog extends ParserBridge2[List[Asgn], Expr, Prog]
@@ -63,9 +63,9 @@ object UseGenericBridgesTest {
     object Val extends ParserBridge1[BigInt, Val]
     object Var extends ParserBridge1[String, Var]
     private lazy val atom = Val(nat) | Var(ident) | "(" ~> expr <~ ")"
+  }
 
-    def main(args: Array[String]): Unit = {
-      println(parser.parse("let x = 1; x + 2"))
-    }
+  def main(args: Array[String]): Unit = {
+    println(parser.parser.parse("let x = 1; x + 2"))
   }
 }
