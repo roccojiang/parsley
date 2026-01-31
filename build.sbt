@@ -143,6 +143,12 @@ lazy val docs = project
     Compile / scalacOptions --= Seq("-unchecked", "-deprecation", "-Wunused:imports", "-Wunused:locals"),
   )
 
+lazy val demo = project
+  .in(file("parsley-garnish-demo"))
+  .dependsOn(parsley.jvm)
+  .dependsOn(garnishRules % ScalafixConfig)
+  .settings(parsleyGarnishTestSettings)
+
 lazy val parsleyGarnishSettings = commonSettings ++ Seq(
   semanticdbEnabled := true,
   semanticdbVersion := scalafixSemanticdb.revision,

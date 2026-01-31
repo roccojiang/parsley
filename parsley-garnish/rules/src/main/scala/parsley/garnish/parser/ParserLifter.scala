@@ -11,9 +11,6 @@ import parsley.garnish.utils.TypeUtils.getParsleyType
 object ParserLifter {
 
   def lift(term: Term)(implicit doc: SemanticDocument): Parser = {
-    val parserType = getParsleyType(term)
-    // TODO: create a typed parser wrapper??
-
     val parser = term match {
       /* Core parsers (excluding non-terminals) */
       case Term.Apply.After_4_6_0(matchers.pure(_), Term.ArgClause(List(func), _)) =>
@@ -100,7 +97,7 @@ object ParserLifter {
         Unknown(unrecognised)
     }
 
-    parser.tpe = getParsleyType(term) // TODO: refactor, and full type inference in the future?
+    parser.tpe = getParsleyType(term) // TODO: refactor, and full type inference in the future? create a typed parser wrapper?
     parser
   }
 }
